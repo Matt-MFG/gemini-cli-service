@@ -14,6 +14,7 @@ import http from 'node:http';
 
 const DAEMON_URL = process.env.DAEMON_URL || 'http://localhost:3100';
 const USER_ID = process.env.GEMINI_USER_ID || 'web-user';
+const API_KEY = process.env.DAEMON_API_KEY || '';
 const APPROVAL_MODE = process.env.APPROVAL_MODE === 'true';
 
 // Tools that require approval before execution
@@ -44,7 +45,10 @@ function daemonRequest(method, path, body) {
       port: url.port,
       path: url.pathname + url.search,
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
+      },
     };
     const req = http.request(opts, (res) => {
       let data = '';
