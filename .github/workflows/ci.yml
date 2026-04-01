@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: |
+          node --test \
+            tests/unit/cli/stream-parser.test.js \
+            tests/unit/cli/session-manager.test.js \
+            tests/unit/queue/conversation-queue.test.js \
+            tests/unit/router/classifier.test.js \
+            tests/unit/db/registry.test.js \
+            tests/unit/tokens/tracker.test.js \
+            tests/unit/tokens/budget.test.js \
+            tests/unit/docker/label-builder.test.js
+
+      - name: Run integration tests
+        run: |
+          node --test \
+            tests/integration/daemon-http.test.js \
+            tests/integration/daemon-cli.test.js
+
+      - name: Run spike 2 (A2UI audit)
+        run: node --test tests/spikes/spike-2-a2ui.test.js
+
+      - name: Run coverage
+        run: npx c8 --reporter=text --reporter=lcov node --test tests/unit/**/*.test.js
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npx eslint src/ tests/ || true  # Non-blocking until eslint config added
+
+  # CLI compatibility test — runs when manually triggered or on new CLI releases
+  cli-compat:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - name: Install Gemini CLI
+        run: npm install -g @anthropic-ai/gemini-cli
+      - name: Verify CLI version
+        run: gemini --version
+      - name: Run CLI integration tests
+        run: node --test tests/integration/daemon-cli.test.js
+      - name: Run spike 0 (routing)
+        run: RUN_SPIKES=true node --test tests/spikes/spike-0-routing.test.js
+        continue-on-error: true

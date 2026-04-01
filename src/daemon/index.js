@@ -9,11 +9,16 @@ const { spawnCli } = require('./cli/spawner');
 const { CommandClassifier } = require('./router/classifier');
 const { ConversationQueue } = require('./queue/conversation-queue');
 const { AppRegistry } = require('./db/registry');
+const { ApprovalGate } = require('./mcp/approval-gate');
+const { TokenTracker } = require('./tokens/tracker');
+const { BudgetManager } = require('./tokens/budget');
+const { AutoCompressor } = require('./tokens/compressor');
 
 const healthRoutes = require('./routes/health');
 const conversationRoutes = require('./routes/conversations');
 const messageRoutes = require('./routes/messages');
 const appRoutes = require('./routes/apps');
+const approvalRoutes = require('./routes/approvals');
 
 const startTime = Date.now();
 
@@ -35,6 +40,10 @@ async function main() {
   const classifier = new CommandClassifier();
   const queue = new ConversationQueue();
   const registry = new AppRegistry(config.dbPath);
+  const approvalGate = new ApprovalGate();
+  const tokenTracker = new TokenTracker(registry);
+  const budgetManager = new BudgetManager(registry);
+  const compressor = new AutoCompressor();
 
   // 3. Build Fastify server
   const app = fastify({
@@ -45,12 +54,16 @@ async function main() {
   await app.register(cors, { origin: true });
 
   // 4. Register routes
-  const deps = { config, startTime, sessionManager, classifier, queue, registry, spawner: spawnCli };
+  const deps = {
+    config, startTime, sessionManager, classifier, queue, registry,
+    spawner: spawnCli, approvalGate, tokenTracker, budgetManager, compressor,
+  };
 
   await app.register(healthRoutes, deps);
   await app.register(conversationRoutes, deps);
   await app.register(messageRoutes, deps);
   await app.register(appRoutes, deps);
+  await app.register(approvalRoutes, deps);
 
   // Global error handler
   app.setErrorHandler((err, _req, reply) => {
@@ -73,6 +86,7 @@ async function main() {
   // Graceful shutdown
   const shutdown = async (signal) => {
     logger.info({ signal }, 'Shutting down');
+    approvalGate.cancelAll();
     await app.close();
     registry.close();
     process.exit(0);
