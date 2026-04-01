@@ -139,6 +139,44 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  // Phase 2 context management tools (P2-W2, F2-06 through F2-09)
+  {
+    name: 'app_render_text',
+    description: 'Returns the rendered text content of a page served by a running app. Use when you need to know what the user sees without loading full HTML into context. Equivalent to viewing the page in a text browser.',
+    inputSchema: {
+      type: 'object',
+      required: ['app_name', 'url_path'],
+      properties: {
+        app_name: { type: 'string', description: 'Name of the running app' },
+        url_path: { type: 'string', description: 'URL path to render, e.g. "/" or "/settings"' },
+      },
+    },
+  },
+  {
+    name: 'app_render_html',
+    description: 'Returns the full rendered HTML of a page served by a running app. Use for design work where you need to inspect markup and CSS classes. Warns if response exceeds 50KB.',
+    inputSchema: {
+      type: 'object',
+      required: ['app_name', 'url_path'],
+      properties: {
+        app_name: { type: 'string', description: 'Name of the running app' },
+        url_path: { type: 'string', description: 'URL path to fetch, e.g. "/" or "/api/users"' },
+      },
+    },
+  },
+  {
+    name: 'app_source',
+    description: 'Finds and reads source files matching a pattern inside an app container. Automatically checks file size — if a file exceeds max_lines, returns only the first and last 50 lines with a note. Prevents accidental context flooding.',
+    inputSchema: {
+      type: 'object',
+      required: ['app_name', 'file_pattern'],
+      properties: {
+        app_name: { type: 'string', description: 'Name of the app container' },
+        file_pattern: { type: 'string', description: 'File glob or path pattern, e.g. "src/App.tsx" or "*.config.js"' },
+        max_lines: { type: 'integer', description: 'Max lines per file before truncation (default: 500)' },
+      },
+    },
+  },
 ];
 
 /**
@@ -279,6 +317,115 @@ function createToolHandlers(services) {
     async a2ui_render({ template, data }) {
       // Returns structured data for the chat platform to render
       return { template, data, rendered: true };
+    },
+
+    // Phase 2 context management tools (P2-W2)
+
+    async app_render_text({ app_name, url_path }, context) {
+      const app = registry.getAppByName(context.userId, app_name);
+      if (!app) return { error: `App "${app_name}" not found` };
+      if (app.status !== 'running') return { error: `App "${app_name}" is not running` };
+
+      // curl the app's internal URL and extract text via lynx-like stripping
+      const internalUrl = `http://localhost:${app.internal_port}${url_path || '/'}`;
+      const curlCmd = `curl -sL --max-time 10 "${internalUrl}" | sed 's/<script[^>]*>.*<\\/script>//g; s/<style[^>]*>.*<\\/style>//g; s/<[^>]*>//g; s/&nbsp;/ /g; s/&amp;/\\&/g; s/&lt;/</g; s/&gt;/>/g' | sed '/^$/d' | head -200`;
+
+      try {
+        const result = await containerManager.exec(app.container_id, curlCmd);
+        if (result.exitCode !== 0) {
+          return { error: `Failed to fetch ${url_path}: ${result.stderr}` };
+        }
+        return {
+          app: app_name,
+          path: url_path,
+          text: result.stdout.trim(),
+          note: 'Rendered text content (HTML tags stripped). Use app_render_html for full markup.',
+        };
+      } catch (err) {
+        return { error: `Failed to render: ${err.message}` };
+      }
+    },
+
+    async app_render_html({ app_name, url_path }, context) {
+      const app = registry.getAppByName(context.userId, app_name);
+      if (!app) return { error: `App "${app_name}" not found` };
+      if (app.status !== 'running') return { error: `App "${app_name}" is not running` };
+
+      const internalUrl = `http://localhost:${app.internal_port}${url_path || '/'}`;
+      const curlCmd = `curl -sL --max-time 10 "${internalUrl}"`;
+
+      try {
+        const result = await containerManager.exec(app.container_id, curlCmd);
+        if (result.exitCode !== 0) {
+          return { error: `Failed to fetch ${url_path}: ${result.stderr}` };
+        }
+
+        const html = result.stdout;
+        const sizeKb = Math.round(Buffer.byteLength(html, 'utf8') / 1024);
+        const warning = sizeKb > 50
+          ? `⚠ Response is ${sizeKb}KB. Consider using app_render_text for a lighter view, or app_source to read specific files.`
+          : null;
+
+        return {
+          app: app_name,
+          path: url_path,
+          html,
+          size_kb: sizeKb,
+          ...(warning && { warning }),
+        };
+      } catch (err) {
+        return { error: `Failed to fetch HTML: ${err.message}` };
+      }
+    },
+
+    async app_source({ app_name, file_pattern, max_lines }, context) {
+      const app = registry.getAppByName(context.userId, app_name);
+      if (!app) return { error: `App "${app_name}" not found` };
+
+      const limit = max_lines || 500;
+      const headTail = 50; // lines from start/end for truncated files
+
+      // Find matching files inside the container
+      const findCmd = `find /app /src /home -maxdepth 5 -name "${file_pattern}" -type f 2>/dev/null | head -20`;
+      try {
+        const findResult = await containerManager.exec(app.container_id, findCmd);
+        const files = findResult.stdout.trim().split('\n').filter(Boolean);
+
+        if (files.length === 0) {
+          return { app: app_name, pattern: file_pattern, files: [], note: 'No files matched the pattern.' };
+        }
+
+        const results = [];
+        for (const filePath of files) {
+          // Check line count first (F2-08: context budget awareness)
+          const wcResult = await containerManager.exec(app.container_id, `wc -l < "${filePath}"`);
+          const lineCount = parseInt(wcResult.stdout.trim(), 10) || 0;
+
+          let content;
+          if (lineCount > limit) {
+            // Return first and last N lines with truncation note
+            const headResult = await containerManager.exec(app.container_id, `head -${headTail} "${filePath}"`);
+            const tailResult = await containerManager.exec(app.container_id, `tail -${headTail} "${filePath}"`);
+            content = headResult.stdout +
+              `\n\n... [${lineCount - headTail * 2} lines omitted — file has ${lineCount} lines total, exceeds max_lines=${limit}] ...\n\n` +
+              tailResult.stdout;
+          } else {
+            const catResult = await containerManager.exec(app.container_id, `cat "${filePath}"`);
+            content = catResult.stdout;
+          }
+
+          results.push({
+            path: filePath,
+            lines: lineCount,
+            truncated: lineCount > limit,
+            content,
+          });
+        }
+
+        return { app: app_name, pattern: file_pattern, files: results };
+      } catch (err) {
+        return { error: `Failed to read source: ${err.message}` };
+      }
     },
   };
 }

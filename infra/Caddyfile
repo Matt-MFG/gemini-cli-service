@@ -1,0 +1,91 @@
+# Caddy reverse proxy for Gemini CLI as a Service (P1-FIX-2)
+#
+# Replaces Traefik for:
+# - Automatic HTTPS with Let's Encrypt (P-05)
+# - Name-based app routing: {app}.{domain} -> container port (F-21, F2-01)
+# - API key authentication for app access (P-03, F-30)
+# - WebSocket proxying for HMR (P-04)
+# - CSP header stripping for embedded iframes (R2-01)
+#
+# Usage:
+#   DOMAIN=your-domain.com API_KEY=your-key caddy run --config Caddyfile
+#
+# For development with nip.io (no real domain):
+#   DOMAIN=34.59.124.147.nip.io caddy run --config Caddyfile
+#
+# The daemon dynamically registers app routes by writing to a shared
+# config file that Caddy watches, or via Caddy's admin API.
+
+{
+	# Global options
+	admin localhost:2019
+	# For nip.io development, use internal CA:
+	# local_certs
+}
+
+# Main daemon UI and API
+{$DOMAIN:localhost} {
+	# Proxy to daemon
+	reverse_proxy localhost:3100
+
+	# WebSocket support for SSE/EventSource
+	@websocket {
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	reverse_proxy @websocket localhost:3100
+
+	# Security headers
+	header {
+		X-Frame-Options SAMEORIGIN
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+# Wildcard app routing: *.{domain} -> container ports
+# Caddy dynamically routes based on app name labels
+*.{$DOMAIN:localhost} {
+	# TLS with wildcard cert (P-05)
+	tls {
+		dns cloudflare {$CF_API_TOKEN:}
+	}
+
+	# API key auth for app access (P-03)
+	@noauth {
+		not header X-API-Key {$API_KEY:}
+		not query api_key={$API_KEY:}
+		not cookie api_key={$API_KEY:}
+	}
+	respond @noauth "Unauthorized" 401
+
+	# Strip restrictive CSP for development apps (R2-01)
+	# This allows apps to be embedded in iframes
+	header {
+		-Content-Security-Policy
+		-X-Frame-Options
+		X-Content-Type-Options nosniff
+		-Server
+	}
+
+	# Dynamic app routing via Caddy's on-demand TLS and reverse_proxy
+	# The daemon registers port mappings; Caddy routes by subdomain
+	#
+	# This is implemented via the Caddy admin API:
+	# POST http://localhost:2019/config/apps/http/servers/srv0/routes
+	#
+	# For each app, the daemon calls:
+	# caddy reverse-proxy --from {app}.{domain} --to localhost:{port}
+	#
+	# Fallback: map subdomains to ports via file-based config
+	# loaded from infra/caddy-apps.json
+
+	# Default: proxy to daemon for unknown subdomains
+	reverse_proxy localhost:3100
+}
+
+# Health check endpoint (no auth)
+:2080 {
+	respond /health "OK" 200
+}

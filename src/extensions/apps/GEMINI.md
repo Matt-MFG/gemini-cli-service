@@ -71,3 +71,45 @@ Create multi-service projects (app + database, frontend + backend).
 
 ### Checking what's running
 1. `@apps.list()` — shows all apps with URLs and status
+
+## Context Management (Phase 2)
+
+### Smart context retrieval
+When you need to understand what an app looks like or debug an issue, use targeted retrieval — never read an entire project into context.
+
+- **"Fix the settings page"** → `@apps.app_source(name="dashboard", file_pattern="*settings*")` then read specific files
+- **"The API is returning errors"** → `@apps.app_render_text(name="api-server", url_path="/api/users")` then read the route handler
+- **"The build is failing"** → `@apps.exec(name="dashboard", command="npm run build 2>&1 | tail -30")`
+- **"Improve the design"** → `@apps.app_render_html(name="dashboard", url_path="/settings")` then read CSS/components
+
+### @apps.app_render_text
+Returns the rendered text content of a page (HTML stripped). Use when you need to know what the user sees.
+```
+@apps.app_render_text(app_name="dashboard", url_path="/settings")
+```
+
+### @apps.app_render_html
+Returns the full HTML of a page. Use for design work where you need markup/CSS inspection.
+```
+@apps.app_render_html(app_name="dashboard", url_path="/")
+```
+⚠ Warns if response exceeds 50KB — consider `app_render_text` or `app_source` instead.
+
+### @apps.app_source
+Finds and reads source files matching a pattern. Automatically truncates large files (>500 lines) to prevent context flooding.
+```
+@apps.app_source(app_name="dashboard", file_pattern="App.tsx")
+@apps.app_source(app_name="api-server", file_pattern="*.config.js")
+```
+
+### Project manifest
+Maintain a `.gemini/project-map.md` inside each container — a living index of the file structure and what each component does. Update it as you build. When asked about a feature, consult the manifest first.
+```
+@apps.exec(name="dashboard", command="cat .gemini/project-map.md")
+```
+
+### Context budget rules
+1. **Check file size before reading** — use `app_source` which auto-truncates
+2. **Prefer targeted commands** over broad reads (`grep` for a function, not `cat` of entire file)
+3. **Use app_render_text first** — switch to app_render_html only for design work
+4. **Maintain the project manifest** — update it after significant changes

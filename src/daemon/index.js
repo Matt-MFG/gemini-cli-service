@@ -25,6 +25,8 @@ const approvalRoutes = require('./routes/approvals');
 const webRoutes = require('./routes/web');
 const fileRoutes = require('./routes/files');
 const googleChatRoutes = require('./routes/google-chat');
+const skillsRoutes = require('./routes/skills');
+const reflectionRoutes = require('./routes/reflection');
 
 const startTime = Date.now();
 
@@ -91,6 +93,8 @@ async function main() {
   await app.register(webRoutes, deps);
   await app.register(fileRoutes, deps);
   await app.register(googleChatRoutes, deps);
+  await app.register(skillsRoutes, deps);
+  await app.register(reflectionRoutes, deps);
 
   // Global error handler
   app.setErrorHandler((err, _req, reply) => {

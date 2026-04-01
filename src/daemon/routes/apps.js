@@ -218,6 +218,62 @@ async function appRoutes(fastify, { registry, containerManager, networkManager }
       return reply.code(500).send({ error: err.message });
     }
   });
+
+  // Phase 2: App group management (P2-W6, F2-24)
+
+  /**
+   * POST /apps/:name/group — Assign app to a group
+   */
+  fastify.post('/apps/:name/group', {
+    schema: {
+      params: { type: 'object', required: ['name'], properties: { name: { type: 'string' } } },
+      body: {
+        type: 'object',
+        required: ['user_id', 'group'],
+        properties: {
+          user_id: { type: 'string' },
+          group: { type: 'string' },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const app = registry.getAppByName(req.body.user_id, req.params.name);
+    if (!app) return reply.code(404).send({ error: 'App not found' });
+
+    try {
+      registry.setAppGroup(app.id, req.body.group);
+      return { name: req.params.name, group: req.body.group };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  /**
+   * POST /apps/:name/link — Link app to a conversation (F2-28)
+   */
+  fastify.post('/apps/:name/link', {
+    schema: {
+      params: { type: 'object', required: ['name'], properties: { name: { type: 'string' } } },
+      body: {
+        type: 'object',
+        required: ['user_id', 'conversation_id'],
+        properties: {
+          user_id: { type: 'string' },
+          conversation_id: { type: 'string' },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const app = registry.getAppByName(req.body.user_id, req.params.name);
+    if (!app) return reply.code(404).send({ error: 'App not found' });
+
+    try {
+      registry.linkAppConversation(app.id, req.body.conversation_id);
+      return { name: req.params.name, conversation_id: req.body.conversation_id };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
 }
 
 module.exports = appRoutes;

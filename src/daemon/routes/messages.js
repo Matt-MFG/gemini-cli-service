@@ -3,6 +3,8 @@
 const { COMMAND_CATEGORIES, DEFAULTS } = require('../lib/constants');
 const { EVENT_TYPES } = require('../lib/constants');
 const { logger } = require('../lib/logger');
+const { checkWriteRouting, createRoutingWarning } = require('../router/write-interceptor');
+const { detectStructuredPanel } = require('../a2ui/detector');
 
 /**
  * Message handling route — the core of the system.
@@ -88,6 +90,12 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
 
         // Stream events as SSE
         invocation.on('event', (event) => {
+          // P2-W3: Detect structured panels in tool output
+          const panel = detectStructuredPanel(event);
+          if (panel) {
+            sendSSE(reply.raw, 'event', panel);
+          }
+
           sendSSE(reply.raw, 'event', event);
 
           // Capture CLI session ID from init event for future --resume
@@ -118,6 +126,13 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
               args: event.args,
               result: null,
             });
+
+            // P1-FIX-1: Check for write_file routing leaks
+            const activeApps = registry.listApps(user_id).map((a) => a.name);
+            const routeCheck = checkWriteRouting(event, activeApps);
+            if (routeCheck.intercepted) {
+              sendSSE(reply.raw, 'event', createRoutingWarning(routeCheck));
+            }
           }
         });
 
