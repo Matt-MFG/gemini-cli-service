@@ -49,7 +49,7 @@ const server = new McpServer({
 // Register tools
 server.tool(
   'apps_create',
-  'Create and start a new application container. Returns a public URL. ALWAYS use this when the user asks to build and run an app.',
+  'Create and start a new application container. Returns a public URL. ALWAYS use this when the user asks to build and run an app. IMPORTANT: After creating, use apps_exec to write files INSIDE the container. Do NOT use write_file — that writes to the VM, not the container. For nginx, write to /usr/share/nginx/html/index.html. For Node, write to /app/.',
   {
     name: z.string().describe('Short name for the app (e.g., "dashboard")'),
     image: z.string().optional().describe('Docker image (default: node:22-alpine)'),
@@ -66,7 +66,7 @@ server.tool(
 
 server.tool(
   'apps_exec',
-  'Execute a shell command inside an app container. Use for ALL file writes, package installs, build commands inside the app.',
+  'Execute a shell command inside an app container. ALWAYS use this instead of write_file or run_shell_command when working on app code. To write files use: cat > /path/file << EOF\\ncontent\\nEOF. This is the ONLY way to get files into the container where the user can see them in their browser.',
   {
     name: z.string().describe('App name'),
     command: z.string().describe('Shell command to run'),
