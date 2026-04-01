@@ -42,6 +42,7 @@ function spawnCli(opts) {
   const child = spawn(cliPath, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, ...env },
+    cwd: opts.cwd || process.env.HOME || '/tmp',
     windowsHide: true,
   });
 
