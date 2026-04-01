@@ -42,17 +42,13 @@ async function appRoutes(fastify, { registry, containerManager, networkManager }
     }
 
     try {
-      // Ensure user network exists (A-05)
+      // Ensure user network exists for inter-container DNS (A-05)
       let networkName;
       if (networkManager) {
         networkName = await networkManager.ensure(user_id);
-        // Connect network to traefik-public too
-        try {
-          await containerManager._docker.getNetwork('traefik-public').connect({ Container: name });
-        } catch { /* may already be connected or container not ready */ }
       }
 
-      // Create container
+      // Create container with direct port mapping
       const result = await containerManager.create({
         userId: user_id,
         name,
@@ -62,14 +58,6 @@ async function appRoutes(fastify, { registry, containerManager, networkManager }
         env,
         networkName,
       });
-
-      // Connect to traefik-public network for routing
-      try {
-        const traefikNet = containerManager._docker.getNetwork('traefik-public');
-        await traefikNet.connect({ Container: result.containerId });
-      } catch (err) {
-        log.warn({ err: err.message }, 'Could not connect to traefik-public');
-      }
 
       // Register in app registry
       const app = registry.createApp({

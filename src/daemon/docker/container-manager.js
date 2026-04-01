@@ -19,6 +19,11 @@ class ContainerManager {
     this._defaultImage = opts.defaultImage || 'node:22-alpine';
     this._defaultCpus = opts.defaultCpus || 2;
     this._defaultMemory = opts.defaultMemory || 2 * 1024 * 1024 * 1024; // 2GB (A-09)
+    // Extract host IP from domain suffix like "34.59.124.147.nip.io"
+    const nipMatch = this._domainSuffix.match(/(\d+\.\d+\.\d+\.\d+)\.nip\.io/);
+    this._hostIp = opts.hostIp || (nipMatch ? nipMatch[1] : 'localhost');
+    this._nextPort = opts.startPort || 8001;
+    this._usedPorts = new Set();
   }
 
   /**
@@ -46,17 +51,23 @@ class ContainerManager {
     } = opts;
 
     const containerName = this._containerName(userId, name);
-    const url = this._appUrl(userId, name);
-    const labels = this._buildTraefikLabels(containerName, url, internalPort);
+    const hostPort = this._allocatePort();
+    const url = `http://${this._hostIp}:${hostPort}`;
+    const labels = {
+      'gemini.managed': 'true',
+      'gemini.user': userId,
+      'gemini.app': name,
+      'gemini.hostPort': String(hostPort),
+    };
 
     const log = logger.child({ userId, appName: name, containerName });
-    log.info({ image, internalPort }, 'Creating container');
+    log.info({ image, internalPort, hostPort }, 'Creating container');
 
     // Build environment array
     const envArray = Object.entries({ ...env, PORT: String(internalPort) })
       .map(([k, v]) => `${k}=${v}`);
 
-    // Container config
+    // Container config with direct port mapping
     const createOpts = {
       Image: image,
       name: containerName,
@@ -64,6 +75,9 @@ class ContainerManager {
       Env: envArray,
       ExposedPorts: { [`${internalPort}/tcp`]: {} },
       HostConfig: {
+        PortBindings: {
+          [`${internalPort}/tcp`]: [{ HostPort: String(hostPort) }],
+        },
         NanoCpus: this._defaultCpus * 1e9, // A-09
         Memory: this._defaultMemory,        // A-09
         RestartPolicy: { Name: 'unless-stopped' },
@@ -79,16 +93,16 @@ class ContainerManager {
 
     const container = await this._docker.createContainer(createOpts);
 
-    // Connect to network if specified
+    // Connect to network if specified (for inter-container DNS)
     if (networkName) {
       const network = this._docker.getNetwork(networkName);
       await network.connect({ Container: container.id, EndpointConfig: { Aliases: [name] } });
     }
 
     await container.start();
-    log.info({ containerId: container.id, url }, 'Container started');
+    log.info({ containerId: container.id, url, hostPort }, 'Container started');
 
-    return { containerId: container.id, url, containerName };
+    return { containerId: container.id, url, containerName, hostPort };
   }
 
   /**
@@ -232,8 +246,18 @@ class ContainerManager {
     return `gemini-${userId}-${appName}`;
   }
 
-  _appUrl(userId, appName) {
-    return `http://${appName}.${userId}.${this._domainSuffix}`;
+  _allocatePort() {
+    while (this._usedPorts.has(this._nextPort)) {
+      this._nextPort++;
+    }
+    const port = this._nextPort;
+    this._usedPorts.add(port);
+    this._nextPort++;
+    return port;
+  }
+
+  _releasePort(port) {
+    this._usedPorts.delete(port);
   }
 
   /**
