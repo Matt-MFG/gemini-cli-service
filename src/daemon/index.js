@@ -59,7 +59,21 @@ async function main() {
   });
 
   await app.register(cors, { origin: true });
-  await app.register(require('./middleware/auth'));
+
+  // Auth: API key check on all routes except /, /health, /ready (F-30)
+  const apiKey = process.env.API_KEY;
+  if (apiKey) {
+    const skipPaths = new Set(['/', '/health', '/ready']);
+    app.addHook('onRequest', async (req, reply) => {
+      if (skipPaths.has(req.url.split('?')[0])) return;
+      const key = req.headers['x-api-key'];
+      if (!key) return reply.code(401).send({ error: 'X-API-Key header required' });
+      if (key !== apiKey) return reply.code(403).send({ error: 'Invalid API key' });
+    });
+    logger.info('API key authentication enabled');
+  } else {
+    logger.warn('API_KEY not set — authentication DISABLED');
+  }
 
   // 4. Register routes
   const deps = {
