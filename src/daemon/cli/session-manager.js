@@ -67,6 +67,30 @@ class SessionManager {
   }
 
   /**
+   * Gets the CLI session ID for resuming. Returns null for new conversations.
+   * The CLI generates its own session UUIDs; we store them after the first turn.
+   */
+  getCliSessionId(userId, conversationId) {
+    try {
+      const metadata = this._readMetadata(userId, conversationId);
+      return metadata.cliSessionId || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Stores the CLI's session ID after the first invocation.
+   * Called when we receive the `init` event with session_id from CLI.
+   */
+  setCliSessionId(userId, conversationId, cliSessionId) {
+    const metadata = this._readMetadata(userId, conversationId);
+    metadata.cliSessionId = cliSessionId;
+    this._writeMetadata(userId, conversationId, metadata);
+    logger.info({ userId, conversationId, cliSessionId }, 'Stored CLI session ID');
+  }
+
+  /**
    * Updates metadata after a message is processed.
    */
   recordTurn(userId, conversationId, firstMessage) {

@@ -66,7 +66,9 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
     // 4. Enqueue for sequential processing per conversation (D-05)
     try {
       await queue.enqueue(conversation_id, async () => {
-        const sessionId = ensureSession(sessionManager, user_id, conversation_id, cliText);
+        // Ensure conversation exists; get CLI session ID for --resume
+        ensureSession(sessionManager, user_id, conversation_id, cliText);
+        const cliSessionId = sessionManager.getCliSessionId(user_id, conversation_id);
 
         // 5. Spawn CLI with Vertex AI env if configured
         const cliEnv = {};
@@ -78,7 +80,7 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
 
         const invocation = spawner({
           text: cliText,
-          sessionId,
+          sessionId: cliSessionId, // null on first turn, CLI UUID on subsequent
           timeoutMs: config?.cliTimeoutMs || DEFAULTS.CLI_TIMEOUT_MS,
           model: config?.cliModel,
           env: cliEnv,
@@ -87,6 +89,11 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
         // Stream events as SSE
         invocation.on('event', (event) => {
           sendSSE(reply.raw, 'event', event);
+
+          // Capture CLI session ID from init event for future --resume
+          if (event.type === EVENT_TYPES.INIT && event.session_id) {
+            sessionManager.setCliSessionId(user_id, conversation_id, event.session_id);
+          }
 
           // Record token usage from result events (real CLI nests under stats)
           if (event.type === EVENT_TYPES.RESULT && registry) {
@@ -97,8 +104,8 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
               inputTokens: stats.input_tokens || stats.input,
               outputTokens: stats.output_tokens || stats.output,
               cachedTokens: stats.cached_tokens || stats.cached,
-              totalTokens: event.total_tokens,
-              durationMs: event.duration_ms,
+              totalTokens: stats.total_tokens,
+              durationMs: stats.duration_ms,
             });
           }
 
@@ -106,7 +113,7 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
           if (event.type === EVENT_TYPES.TOOL_CALL && registry) {
             registry.logToolExecution({
               userId: user_id,
-              sessionId,
+              sessionId: cliSessionId,
               toolName: event.tool_name,
               args: event.args,
               result: null,
