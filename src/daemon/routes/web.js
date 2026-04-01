@@ -112,6 +112,24 @@ let userId = 'web-user';
 let totalTokens = 0;
 let sending = false;
 let currentFilePath = null;
+let apiKey = sessionStorage.getItem('apiKey') || '';
+
+// Auth: prompt for API key if not set
+function ensureAuth() {
+  if (apiKey) return true;
+  apiKey = prompt('Enter API key:');
+  if (!apiKey) return false;
+  sessionStorage.setItem('apiKey', apiKey);
+  return true;
+}
+
+// Authenticated fetch wrapper
+function authFetch(url, opts = {}) {
+  if (!opts.headers) opts.headers = {};
+  if (typeof opts.headers.set === 'function') opts.headers.set('X-API-Key', apiKey);
+  else opts.headers['X-API-Key'] = apiKey;
+  return fetch(url, opts);
+}
 
 const $ = (id) => document.getElementById(id);
 const $msgs = $('messages');
@@ -158,7 +176,7 @@ async function send() {
   if (!text || sending) return;
 
   if (!conversationId) {
-    const resp = await fetch(API + '/conversations/new', {
+    const resp = await authFetch(API + '/conversations/new', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, name: text.slice(0, 50) }),
     });
@@ -175,7 +193,7 @@ async function send() {
   let fullContent = '';
 
   try {
-    const resp = await fetch(API + '/send', {
+    const resp = await authFetch(API + '/send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, conversation_id: conversationId, text }),
     });
@@ -241,7 +259,7 @@ function updateTokens() {
 
 async function loadConversations() {
   try {
-    const resp = await fetch(API + '/conversations/list?user_id=' + userId);
+    const resp = await authFetch(API + '/conversations/list?user_id=' + userId);
     const data = await resp.json();
     $convSelect.innerHTML = '<option value="">New conversation</option>';
     for (const c of data.conversations) {
@@ -256,7 +274,7 @@ async function loadConversations() {
 
 async function checkHealth() {
   try {
-    const resp = await fetch(API + '/health');
+    const resp = await authFetch(API + '/health');
     const d = await resp.json();
     $status.textContent = 'v' + d.cliVersion + ' | up ' + d.uptime + 's';
     $status.className = 'status';
@@ -293,7 +311,7 @@ $('fv-back').addEventListener('click', () => {
 async function loadFiles(dirPath) {
   const url = dirPath ? API + '/files?path=' + encodeURIComponent(dirPath) : API + '/files';
   try {
-    const resp = await fetch(url);
+    const resp = await authFetch(url);
     if (!resp.ok) { $fpList.innerHTML = '<div style="padding:14px;color:#a44;">Access denied</div>'; return; }
     const data = await resp.json();
     currentFilePath = data.path;
@@ -324,7 +342,7 @@ async function loadFiles(dirPath) {
 
 async function viewFile(filePath) {
   try {
-    const resp = await fetch(API + '/files/read?path=' + encodeURIComponent(filePath));
+    const resp = await authFetch(API + '/files/read?path=' + encodeURIComponent(filePath));
     if (!resp.ok) { alert('Cannot read file'); return; }
     const data = await resp.json();
     $fvName.textContent = data.name;
@@ -347,11 +365,15 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// Init
+// Init — prompt for API key
+if (!ensureAuth()) {
+  document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#888;">API key required. Refresh to try again.</div>';
+} else {
 checkHealth();
 setInterval(checkHealth, 30000);
 loadConversations();
 addMsg('system', 'Welcome to Gemini CLI as a Service. Type a message to start. Click "Files" to browse the VM filesystem.');
+}
 </script>
 </body>
 </html>`;

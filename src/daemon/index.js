@@ -59,6 +59,7 @@ async function main() {
   });
 
   await app.register(cors, { origin: true });
+  await app.register(require('./middleware/auth'));
 
   // 4. Register routes
   const deps = {
