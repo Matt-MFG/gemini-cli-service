@@ -1,5 +1,6 @@
 'use strict';
 
+require('dotenv').config();
 const fastify = require('fastify');
 const cors = require('@fastify/cors');
 const { loadConfig, validateCliVersion } = require('./config');
