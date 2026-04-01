@@ -1,0 +1,9 @@
+[extension]
+name = "apps"
+description = "Manage application containers with public URLs. Create, run, stop, and interact with apps in isolated Docker environments."
+version = "1.0.0"
+
+[mcp]
+# This extension provides its tools via the daemon's MCP server.
+# The daemon auto-configures itself in the CLI's settings.json (D-08).
+# Tools: apps_create, apps_stop, apps_restart, apps_list, apps_exec, apps_logs, apps_compose

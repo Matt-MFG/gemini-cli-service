@@ -1,0 +1,63 @@
+# Docker Compose for daemon + Traefik (W10b)
+# Run: docker compose up -d
+
+services:
+  daemon:
+    build: ..
+    container_name: gemini-daemon
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker API access
+      - daemon-data:/app/data                       # SQLite + sessions
+      - ${HOME}/.gemini:/root/.gemini:ro            # CLI config (read-only)
+    environment:
+      - PORT=3100
+      - HOST=0.0.0.0
+      - SESSION_DIR=/app/data/sessions
+      - DB_PATH=/app/data/registry.db
+      - LOG_LEVEL=info
+      - NODE_ENV=production
+      - DOMAIN_SUFFIX=${DOMAIN_SUFFIX:-agent.example.com}
+    networks:
+      - traefik-public
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3100/health').then(r=>r.ok?process.exit(0):process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  traefik:
+    image: traefik:v3.2
+    container_name: gemini-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik-acme:/acme
+    environment:
+      - GCE_PROJECT=${GCP_PROJECT}
+      - GCE_SERVICE_ACCOUNT_FILE=/run/secrets/gcp-sa-key
+      - ACME_EMAIL=${ACME_EMAIL}
+    networks:
+      - traefik-public
+    secrets:
+      - gcp-sa-key
+
+networks:
+  traefik-public:
+    name: traefik-public
+    driver: bridge
+
+volumes:
+  daemon-data:
+  traefik-acme:
+
+secrets:
+  gcp-sa-key:
+    file: ${GCP_SA_KEY_FILE:-./secrets/gcp-sa-key.json}

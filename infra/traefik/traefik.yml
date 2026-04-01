@@ -1,0 +1,56 @@
+# Traefik static configuration (W10b)
+# Auto-discovers containers via Docker labels (P-01)
+# Wildcard TLS via Let's Encrypt DNS-01 challenge (P-05)
+
+api:
+  dashboard: false  # Disable in production
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+    transport:
+      respondingTimeouts:
+        readTimeout: "600s"  # Support long CLI invocations
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false  # Only expose containers with traefik.enable=true
+    watch: true              # Auto-discover within seconds (P-01)
+    network: "traefik-public"
+
+  file:
+    directory: "/etc/traefik/dynamic"
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "${ACME_EMAIL}"
+      storage: "/acme/acme.json"
+      dnsChallenge:
+        provider: "gcloud"  # Google Cloud DNS for wildcard certs
+        delayBeforeCheck: 10
+        resolvers:
+          - "8.8.8.8:53"
+          - "1.1.1.1:53"
+
+log:
+  level: "INFO"
+  format: "json"
+
+accessLog:
+  format: "json"
+  filters:
+    statusCodes:
+      - "400-599"

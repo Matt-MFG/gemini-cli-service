@@ -1,0 +1,105 @@
+{
+  "$schema": "./command-registry-schema.json",
+  "version": "1.0.0",
+  "description": "Gemini CLI slash command classification registry (CL-01). Three categories: text_safe (forwarded as -p), parameterized_safe (interactive bare, text-safe with args), unsupported (terminal-only).",
+  "commands": {
+    "/memory": {
+      "category": "text_safe",
+      "description": "Manage persistent memory instructions",
+      "subcommands": {
+        "add": "text_safe",
+        "show": "text_safe",
+        "remove": "text_safe"
+      }
+    },
+    "/compress": {
+      "category": "text_safe",
+      "description": "Compress conversation context to reduce tokens"
+    },
+    "/tools": {
+      "category": "text_safe",
+      "description": "List available tools and extensions"
+    },
+    "/stats": {
+      "category": "text_safe",
+      "description": "Show session statistics and token usage"
+    },
+    "/chat": {
+      "category": "text_safe",
+      "description": "Chat session management",
+      "subcommands": {
+        "save": "text_safe",
+        "delete": "text_safe",
+        "list": "text_safe"
+      }
+    },
+    "/help": {
+      "category": "text_safe",
+      "description": "Show help information"
+    },
+    "/version": {
+      "category": "text_safe",
+      "description": "Show CLI version"
+    },
+    "/resume": {
+      "category": "parameterized_safe",
+      "description": "Resume a previous session. Bare: shows session list. With arg: resumes specific session.",
+      "interactive_adapter": "session_picker"
+    },
+    "/restore": {
+      "category": "parameterized_safe",
+      "description": "Restore a previous session checkpoint",
+      "interactive_adapter": "checkpoint_picker"
+    },
+    "/clear": {
+      "category": "unsupported",
+      "description": "Clear terminal screen — terminal-specific, no remote equivalent",
+      "explanation": "The /clear command clears the terminal screen. Since you're in a chat interface, there's no screen to clear. Your conversation history is always visible in the chat."
+    },
+    "/copy": {
+      "category": "unsupported",
+      "description": "Copy to clipboard — terminal-specific, no remote equivalent",
+      "explanation": "The /copy command copies content to the terminal clipboard. In a chat interface, you can select and copy text directly from the messages."
+    },
+    "/theme": {
+      "category": "unsupported",
+      "description": "Change terminal theme — terminal-specific, no remote equivalent",
+      "explanation": "The /theme command changes the terminal color theme. Chat interface appearance is controlled by your chat platform settings."
+    },
+    "/settings": {
+      "category": "unsupported",
+      "description": "Open settings TUI — terminal-specific, no remote equivalent",
+      "explanation": "The /settings command opens an interactive settings editor in the terminal. Configuration can be managed through the settings file on the VM."
+    }
+  },
+  "meta_commands": {
+    "::new": {
+      "description": "Create a new conversation",
+      "handler": "create_conversation"
+    },
+    "::list": {
+      "description": "List all conversations",
+      "handler": "list_conversations"
+    },
+    "::switch": {
+      "description": "Switch to a different conversation",
+      "handler": "switch_conversation"
+    },
+    "::costs": {
+      "description": "Show token usage and cost estimate",
+      "handler": "show_costs"
+    },
+    "::apps": {
+      "description": "List running applications",
+      "handler": "list_apps"
+    },
+    "::approve": {
+      "description": "Approve a pending tool execution",
+      "handler": "approve_tool"
+    },
+    "::reject": {
+      "description": "Reject a pending tool execution",
+      "handler": "reject_tool"
+    }
+  }
+}
