@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Web UI route — serves a chat interface at GET /
+ * Web UI route — serves a chat interface with file browser at GET /
  */
 async function webRoutes(fastify) {
   fastify.get('/', async (_req, reply) => {
@@ -25,8 +25,14 @@ const HTML = `<!DOCTYPE html>
   .toolbar { padding:8px 20px; background:#141420; border-bottom:1px solid #222; display:flex; gap:8px; align-items:center; font-size:13px; }
   .toolbar select, .toolbar button { background:#222; color:#ccc; border:1px solid #444; border-radius:4px; padding:4px 10px; font-size:13px; cursor:pointer; }
   .toolbar button:hover { background:#333; }
+  .toolbar .active { background:#4a4aff; color:#fff; border-color:#4a4aff; }
+
+  .main { flex:1; display:flex; overflow:hidden; }
+
+  /* Chat panel */
+  .chat-panel { flex:1; display:flex; flex-direction:column; min-width:0; }
   #messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px; }
-  .msg { max-width:80%; padding:10px 14px; border-radius:10px; line-height:1.5; font-size:14px; white-space:pre-wrap; word-wrap:break-word; }
+  .msg { max-width:85%; padding:10px 14px; border-radius:10px; line-height:1.5; font-size:14px; white-space:pre-wrap; word-wrap:break-word; }
   .msg.user { align-self:flex-end; background:#2a2a5a; color:#c8c8ff; }
   .msg.assistant { align-self:flex-start; background:#1e1e2e; color:#ddd; border:1px solid #333; }
   .msg.system { align-self:center; color:#888; font-size:12px; font-style:italic; }
@@ -38,6 +44,26 @@ const HTML = `<!DOCTYPE html>
   #send { background:#4a4aff; color:#fff; border:none; border-radius:8px; padding:10px 20px; font-size:14px; cursor:pointer; font-weight:600; }
   #send:hover { background:#5c5cff; }
   #send:disabled { background:#333; cursor:not-allowed; }
+
+  /* File browser panel */
+  .file-panel { width:400px; background:#111118; border-left:1px solid #333; display:none; flex-direction:column; }
+  .file-panel.open { display:flex; }
+  .file-panel .fp-header { padding:10px 14px; background:#1a1a2e; border-bottom:1px solid #333; display:flex; align-items:center; gap:8px; font-size:13px; }
+  .file-panel .fp-header button { background:none; border:none; color:#888; cursor:pointer; font-size:16px; }
+  .file-panel .fp-header button:hover { color:#fff; }
+  .fp-path { flex:1; color:#aaa; font-family:monospace; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fp-list { flex:1; overflow-y:auto; padding:4px 0; }
+  .fp-item { display:flex; align-items:center; gap:8px; padding:6px 14px; cursor:pointer; font-size:13px; }
+  .fp-item:hover { background:#1a1a2e; }
+  .fp-item .icon { width:16px; text-align:center; }
+  .fp-item .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fp-item .size { color:#666; font-size:11px; }
+  .fp-viewer { flex:1; overflow:auto; padding:12px; display:none; }
+  .fp-viewer.open { display:block; }
+  .fp-viewer pre { font-family:'Cascadia Code','Fira Code',monospace; font-size:12px; line-height:1.6; color:#ccc; white-space:pre-wrap; word-wrap:break-word; }
+  .fp-viewer .fv-header { display:flex; align-items:center; gap:8px; padding-bottom:8px; border-bottom:1px solid #333; margin-bottom:8px; }
+  .fp-viewer .fv-name { font-weight:600; color:#7c8aff; }
+  .fp-viewer .fv-size { color:#666; font-size:11px; }
 </style>
 </head>
 <body>
@@ -49,12 +75,35 @@ const HTML = `<!DOCTYPE html>
   <span>Conversation:</span>
   <select id="conv-select"><option value="">New conversation</option></select>
   <button id="new-conv">+ New</button>
+  <button id="toggle-files">Files</button>
   <span style="margin-left:auto" id="token-count"></span>
 </div>
-<div id="messages"></div>
-<div id="input-area">
-  <textarea id="input" rows="1" placeholder="Send a message..." autofocus></textarea>
-  <button id="send">Send</button>
+<div class="main">
+  <div class="chat-panel">
+    <div id="messages"></div>
+    <div id="input-area">
+      <textarea id="input" rows="1" placeholder="Send a message..." autofocus></textarea>
+      <button id="send">Send</button>
+    </div>
+  </div>
+  <div id="file-panel" class="file-panel">
+    <div class="fp-header">
+      <button id="fp-up" title="Go up">&#8593;</button>
+      <button id="fp-home" title="Home">&#8962;</button>
+      <button id="fp-refresh" title="Refresh">&#8635;</button>
+      <span class="fp-path" id="fp-path">/home</span>
+      <button id="fp-close" title="Close">&#10005;</button>
+    </div>
+    <div class="fp-list" id="fp-list"></div>
+    <div class="fp-viewer" id="fp-viewer">
+      <div class="fv-header">
+        <button id="fv-back" style="background:none;border:none;color:#888;cursor:pointer;">&#8592; Back</button>
+        <span class="fv-name" id="fv-name"></span>
+        <span class="fv-size" id="fv-size"></span>
+      </div>
+      <pre id="fv-content"></pre>
+    </div>
+  </div>
 </div>
 <script>
 const API = location.origin;
@@ -62,28 +111,35 @@ let conversationId = null;
 let userId = 'web-user';
 let totalTokens = 0;
 let sending = false;
+let currentFilePath = null;
 
-const $msgs = document.getElementById('messages');
-const $input = document.getElementById('input');
-const $send = document.getElementById('send');
-const $status = document.getElementById('status');
-const $convSelect = document.getElementById('conv-select');
-const $tokenCount = document.getElementById('token-count');
+const $ = (id) => document.getElementById(id);
+const $msgs = $('messages');
+const $input = $('input');
+const $send = $('send');
+const $status = $('status');
+const $convSelect = $('conv-select');
+const $tokenCount = $('token-count');
+const $filePanel = $('file-panel');
+const $fpList = $('fp-list');
+const $fpPath = $('fp-path');
+const $fpViewer = $('fp-viewer');
+const $fvContent = $('fv-content');
+const $fvName = $('fv-name');
+const $fvSize = $('fv-size');
 
-// Auto-resize textarea
+// --- Chat ---
+
 $input.addEventListener('input', () => {
   $input.style.height = 'auto';
   $input.style.height = Math.min($input.scrollHeight, 120) + 'px';
 });
-
-// Send on Enter (Shift+Enter for newline)
 $input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
-
 $send.addEventListener('click', send);
 
-document.getElementById('new-conv').addEventListener('click', async () => {
+$('new-conv').addEventListener('click', () => {
   conversationId = null;
   $msgs.innerHTML = '';
   addMsg('system', 'New conversation started.');
@@ -94,22 +150,16 @@ document.getElementById('new-conv').addEventListener('click', async () => {
 
 $convSelect.addEventListener('change', () => {
   const id = $convSelect.value;
-  if (id) {
-    conversationId = id;
-    $msgs.innerHTML = '';
-    addMsg('system', 'Switched to conversation ' + id.slice(0, 8) + '...');
-  }
+  if (id) { conversationId = id; $msgs.innerHTML = ''; addMsg('system', 'Switched to conversation ' + id.slice(0,8) + '...'); }
 });
 
 async function send() {
   const text = $input.value.trim();
   if (!text || sending) return;
 
-  // Create conversation if needed
   if (!conversationId) {
     const resp = await fetch(API + '/conversations/new', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, name: text.slice(0, 50) }),
     });
     const data = await resp.json();
@@ -118,18 +168,15 @@ async function send() {
   }
 
   addMsg('user', text);
-  $input.value = '';
-  $input.style.height = 'auto';
-  sending = true;
-  $send.disabled = true;
+  $input.value = ''; $input.style.height = 'auto';
+  sending = true; $send.disabled = true;
 
   const assistantEl = addMsg('assistant', '');
   let fullContent = '';
 
   try {
     const resp = await fetch(API + '/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, conversation_id: conversationId, text }),
     });
 
@@ -148,35 +195,34 @@ async function send() {
       for (const line of lines) {
         if (line.startsWith('data:')) {
           try {
-            const event = JSON.parse(line.slice(5).trim());
-            if (event.type === 'message' && event.role === 'assistant') {
-              fullContent += event.content || '';
+            const ev = JSON.parse(line.slice(5).trim());
+            if (ev.type === 'message' && ev.role === 'assistant') {
+              fullContent += ev.content || '';
               assistantEl.querySelector('.text').textContent = fullContent;
               $msgs.scrollTop = $msgs.scrollHeight;
-            } else if (event.type === 'tool_use') {
-              addMsg('tool', '> ' + event.tool_name + '(' + JSON.stringify(event.parameters || {}).slice(0, 200) + ')');
-            } else if (event.type === 'tool_result') {
-              addMsg('tool', '< ' + (event.output || event.status || '').slice(0, 300));
-            } else if (event.type === 'result' && event.stats) {
-              totalTokens += event.stats.total_tokens || 0;
+            } else if (ev.type === 'tool_use') {
+              addMsg('tool', '> ' + ev.tool_name + '(' + JSON.stringify(ev.parameters || {}).slice(0,200) + ')');
+            } else if (ev.type === 'tool_result') {
+              addMsg('tool', '< ' + (ev.output || ev.status || '').slice(0,300));
+              // Auto-refresh file browser after tool execution
+              if ($filePanel.classList.contains('open')) loadFiles(currentFilePath);
+            } else if (ev.type === 'result' && ev.stats) {
+              totalTokens += ev.stats.total_tokens || 0;
               updateTokens();
-              const dur = event.stats.duration_ms;
-              assistantEl.querySelector('.meta').textContent = (dur ? dur + 'ms' : '');
+              assistantEl.querySelector('.meta').textContent = (ev.stats.duration_ms || '') + 'ms';
+              // Refresh files after each turn
+              if ($filePanel.classList.contains('open')) loadFiles(currentFilePath);
             }
           } catch {}
         }
       }
     }
-
     if (!fullContent) assistantEl.querySelector('.text').textContent = '(no text response)';
-
   } catch (err) {
     assistantEl.querySelector('.text').textContent = 'Error: ' + err.message;
   }
 
-  sending = false;
-  $send.disabled = false;
-  $input.focus();
+  sending = false; $send.disabled = false; $input.focus();
 }
 
 function addMsg(role, text) {
@@ -201,7 +247,7 @@ async function loadConversations() {
     for (const c of data.conversations) {
       const opt = document.createElement('option');
       opt.value = c.conversationId;
-      opt.textContent = (c.firstMessage || c.name || c.conversationId.slice(0, 8)) + ' (' + c.turnCount + ' turns)';
+      opt.textContent = (c.firstMessage || c.name || c.conversationId.slice(0,8)) + ' (' + c.turnCount + ' turns)';
       if (c.conversationId === conversationId) opt.selected = true;
       $convSelect.appendChild(opt);
     }
@@ -211,8 +257,8 @@ async function loadConversations() {
 async function checkHealth() {
   try {
     const resp = await fetch(API + '/health');
-    const data = await resp.json();
-    $status.textContent = 'v' + data.cliVersion + ' | up ' + data.uptime + 's';
+    const d = await resp.json();
+    $status.textContent = 'v' + d.cliVersion + ' | up ' + d.uptime + 's';
     $status.className = 'status';
   } catch {
     $status.textContent = 'Disconnected';
@@ -220,10 +266,92 @@ async function checkHealth() {
   }
 }
 
+// --- File Browser ---
+
+$('toggle-files').addEventListener('click', () => {
+  $filePanel.classList.toggle('open');
+  $('toggle-files').classList.toggle('active', $filePanel.classList.contains('open'));
+  if ($filePanel.classList.contains('open') && !currentFilePath) loadFiles();
+});
+$('fp-close').addEventListener('click', () => {
+  $filePanel.classList.remove('open');
+  $('toggle-files').classList.remove('active');
+});
+$('fp-up').addEventListener('click', () => {
+  if (currentFilePath) {
+    const parent = currentFilePath.replace(/\\/[^\\/]+\\/?$/, '') || '/';
+    loadFiles(parent);
+  }
+});
+$('fp-home').addEventListener('click', () => loadFiles());
+$('fp-refresh').addEventListener('click', () => loadFiles(currentFilePath));
+$('fv-back').addEventListener('click', () => {
+  $fpViewer.classList.remove('open');
+  $fpList.style.display = '';
+});
+
+async function loadFiles(dirPath) {
+  const url = dirPath ? API + '/files?path=' + encodeURIComponent(dirPath) : API + '/files';
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) { $fpList.innerHTML = '<div style="padding:14px;color:#a44;">Access denied</div>'; return; }
+    const data = await resp.json();
+    currentFilePath = data.path;
+    $fpPath.textContent = data.path;
+    $fpViewer.classList.remove('open');
+    $fpList.style.display = '';
+
+    $fpList.innerHTML = '';
+    for (const item of data.items) {
+      const el = document.createElement('div');
+      el.className = 'fp-item';
+      const icon = item.type === 'directory' ? '&#128193;' : '&#128196;';
+      const size = item.size != null ? formatSize(item.size) : '';
+      el.innerHTML = '<span class="icon">' + icon + '</span><span class="name">' + escHtml(item.name) + '</span><span class="size">' + size + '</span>';
+      el.addEventListener('click', () => {
+        if (item.type === 'directory') loadFiles(item.path);
+        else viewFile(item.path);
+      });
+      $fpList.appendChild(el);
+    }
+    if (data.items.length === 0) {
+      $fpList.innerHTML = '<div style="padding:14px;color:#666;">Empty directory</div>';
+    }
+  } catch (err) {
+    $fpList.innerHTML = '<div style="padding:14px;color:#a44;">Error: ' + err.message + '</div>';
+  }
+}
+
+async function viewFile(filePath) {
+  try {
+    const resp = await fetch(API + '/files/read?path=' + encodeURIComponent(filePath));
+    if (!resp.ok) { alert('Cannot read file'); return; }
+    const data = await resp.json();
+    $fvName.textContent = data.name;
+    $fvSize.textContent = formatSize(data.size);
+    $fvContent.textContent = data.content;
+    $fpList.style.display = 'none';
+    $fpViewer.classList.add('open');
+  } catch (err) {
+    alert('Error reading file: ' + err.message);
+  }
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(1) + ' MB';
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Init
 checkHealth();
 setInterval(checkHealth, 30000);
 loadConversations();
-addMsg('system', 'Welcome to Gemini CLI as a Service. Type a message to start.');
+addMsg('system', 'Welcome to Gemini CLI as a Service. Type a message to start. Click "Files" to browse the VM filesystem.');
 </script>
 </body>
 </html>`;

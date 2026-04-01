@@ -21,6 +21,7 @@ const messageRoutes = require('./routes/messages');
 const appRoutes = require('./routes/apps');
 const approvalRoutes = require('./routes/approvals');
 const webRoutes = require('./routes/web');
+const fileRoutes = require('./routes/files');
 
 const startTime = Date.now();
 
@@ -67,6 +68,7 @@ async function main() {
   await app.register(appRoutes, deps);
   await app.register(approvalRoutes, deps);
   await app.register(webRoutes, deps);
+  await app.register(fileRoutes, deps);
 
   // Global error handler
   app.setErrorHandler((err, _req, reply) => {
