@@ -1,14 +1,23 @@
 'use strict';
 
-/** Known stream-json event types from Gemini CLI */
+/**
+ * Known stream-json event types from Gemini CLI.
+ * Updated from real CLI output (v0.36.0):
+ *   init, message (role: user|assistant), result
+ *   Tool calls appear as message events with tool metadata.
+ */
 const EVENT_TYPES = Object.freeze({
+  // Actual types from CLI v0.36.0
+  INIT: 'init',
+  MESSAGE: 'message',
+  RESULT: 'result',
+  // Legacy/expected types (may appear in future versions)
   TURN_START: 'turn_start',
   MODEL_TURN: 'model_turn',
   TOOL_CALL: 'tool_call',
   TOOL_RESULT: 'tool_result',
   MODEL_RESPONSE: 'model_response',
   ERROR: 'error',
-  RESULT: 'result',
 });
 
 const KNOWN_EVENT_TYPES = new Set(Object.values(EVENT_TYPES));

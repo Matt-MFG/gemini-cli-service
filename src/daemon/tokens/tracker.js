@@ -20,14 +20,16 @@ class TokenTracker {
   recordFromEvent(userId, conversationId, event) {
     if (event.type !== EVENT_TYPES.RESULT) return null;
 
+    // Real CLI v0.36.0 nests token data under event.stats
+    const stats = event.stats || event;
     const usage = {
       userId,
       conversationId,
-      inputTokens: event.input_tokens || 0,
-      outputTokens: event.output_tokens || 0,
-      cachedTokens: event.cached_tokens || 0,
-      totalTokens: event.total_tokens || 0,
-      durationMs: event.duration_ms || 0,
+      inputTokens: stats.input_tokens || stats.input || 0,
+      outputTokens: stats.output_tokens || stats.output || 0,
+      cachedTokens: stats.cached_tokens || stats.cached || 0,
+      totalTokens: stats.total_tokens || 0,
+      durationMs: stats.duration_ms || 0,
     };
 
     this._registry.recordTokenUsage(usage);

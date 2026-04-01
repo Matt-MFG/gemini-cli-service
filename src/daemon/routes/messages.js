@@ -16,7 +16,7 @@ const { logger } = require('../lib/logger');
  * 4. Stream parsed events back as SSE
  * 5. Record token usage from result event
  */
-async function messageRoutes(fastify, { classifier, sessionManager, queue, spawner, registry }) {
+async function messageRoutes(fastify, { config, classifier, sessionManager, queue, spawner, registry }) {
   fastify.post('/send', {
     schema: {
       body: {
@@ -68,25 +68,35 @@ async function messageRoutes(fastify, { classifier, sessionManager, queue, spawn
       await queue.enqueue(conversation_id, async () => {
         const sessionId = ensureSession(sessionManager, user_id, conversation_id, cliText);
 
-        // 5. Spawn CLI
+        // 5. Spawn CLI with Vertex AI env if configured
+        const cliEnv = {};
+        if (config && config.vertexAi) {
+          cliEnv.GOOGLE_GENAI_USE_VERTEXAI = 'true';
+          cliEnv.GOOGLE_CLOUD_PROJECT = config.gcpProject;
+          cliEnv.GOOGLE_CLOUD_LOCATION = config.gcpLocation;
+        }
+
         const invocation = spawner({
           text: cliText,
           sessionId,
-          timeoutMs: DEFAULTS.CLI_TIMEOUT_MS,
+          timeoutMs: config?.cliTimeoutMs || DEFAULTS.CLI_TIMEOUT_MS,
+          model: config?.cliModel,
+          env: cliEnv,
         });
 
         // Stream events as SSE
         invocation.on('event', (event) => {
           sendSSE(reply.raw, 'event', event);
 
-          // Record token usage from result events
+          // Record token usage from result events (real CLI nests under stats)
           if (event.type === EVENT_TYPES.RESULT && registry) {
+            const stats = event.stats || event;
             registry.recordTokenUsage({
               userId: user_id,
               conversationId: conversation_id,
-              inputTokens: event.input_tokens,
-              outputTokens: event.output_tokens,
-              cachedTokens: event.cached_tokens,
+              inputTokens: stats.input_tokens || stats.input,
+              outputTokens: stats.output_tokens || stats.output,
+              cachedTokens: stats.cached_tokens || stats.cached,
               totalTokens: event.total_tokens,
               durationMs: event.duration_ms,
             });

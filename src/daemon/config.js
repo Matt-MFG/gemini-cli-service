@@ -22,6 +22,10 @@ function loadConfig() {
     logLevel: process.env.LOG_LEVEL || DEFAULTS.LOG_LEVEL,
     domainSuffix: process.env.DOMAIN_SUFFIX || DEFAULTS.DOMAIN_SUFFIX,
     nodeEnv: process.env.NODE_ENV || 'development',
+    cliModel: process.env.CLI_MODEL || 'gemini-2.5-flash',
+    vertexAi: process.env.GOOGLE_GENAI_USE_VERTEXAI === 'true',
+    gcpProject: process.env.GOOGLE_CLOUD_PROJECT || '',
+    gcpLocation: process.env.GOOGLE_CLOUD_LOCATION || 'us-central1',
   };
 
   // Read pinned version

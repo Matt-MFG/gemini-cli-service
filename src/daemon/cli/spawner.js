@@ -32,8 +32,9 @@ function spawnCli(opts) {
     env = {},
   } = opts;
 
+  const model = opts.model;
   const invocation = new CliInvocation();
-  const args = buildArgs(text, sessionId);
+  const args = buildArgs(text, sessionId, { model });
   const log = logger.child({ sessionId, cliPath });
 
   log.info({ args: args.join(' ') }, 'Spawning CLI invocation');
@@ -103,8 +104,12 @@ function spawnCli(opts) {
 /**
  * Builds CLI arguments for a headless invocation.
  */
-function buildArgs(text, sessionId) {
+function buildArgs(text, sessionId, opts = {}) {
   const args = ['-p', text, '--output-format', 'stream-json', '--yolo'];
+
+  if (opts.model) {
+    args.push('--model', opts.model);
+  }
 
   if (sessionId) {
     args.push('--resume', sessionId);
