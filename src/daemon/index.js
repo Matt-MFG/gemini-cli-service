@@ -20,6 +20,7 @@ const conversationRoutes = require('./routes/conversations');
 const messageRoutes = require('./routes/messages');
 const appRoutes = require('./routes/apps');
 const approvalRoutes = require('./routes/approvals');
+const webRoutes = require('./routes/web');
 
 const startTime = Date.now();
 
@@ -65,6 +66,7 @@ async function main() {
   await app.register(messageRoutes, deps);
   await app.register(appRoutes, deps);
   await app.register(approvalRoutes, deps);
+  await app.register(webRoutes, deps);
 
   // Global error handler
   app.setErrorHandler((err, _req, reply) => {
