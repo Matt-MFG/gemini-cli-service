@@ -14,6 +14,8 @@ const { ApprovalGate } = require('./mcp/approval-gate');
 const { TokenTracker } = require('./tokens/tracker');
 const { BudgetManager } = require('./tokens/budget');
 const { AutoCompressor } = require('./tokens/compressor');
+const { ContainerManager } = require('./docker/container-manager');
+const { NetworkManager } = require('./docker/network-manager');
 
 const healthRoutes = require('./routes/health');
 const conversationRoutes = require('./routes/conversations');
@@ -47,6 +49,8 @@ async function main() {
   const tokenTracker = new TokenTracker(registry);
   const budgetManager = new BudgetManager(registry);
   const compressor = new AutoCompressor();
+  const containerManager = new ContainerManager({ domainSuffix: config.domainSuffix });
+  const networkManager = new NetworkManager();
 
   // 3. Build Fastify server
   const app = fastify({
@@ -60,6 +64,7 @@ async function main() {
   const deps = {
     config, startTime, sessionManager, classifier, queue, registry,
     spawner: spawnCli, approvalGate, tokenTracker, budgetManager, compressor,
+    containerManager, networkManager,
   };
 
   await app.register(healthRoutes, deps);

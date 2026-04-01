@@ -233,7 +233,7 @@ class ContainerManager {
   }
 
   _appUrl(userId, appName) {
-    return `https://${appName}.${userId}.${this._domainSuffix}`;
+    return `http://${appName}.${userId}.${this._domainSuffix}`;
   }
 
   /**
@@ -246,11 +246,8 @@ class ContainerManager {
     return {
       'traefik.enable': 'true',
       [`traefik.http.routers.${routerName}.rule`]: `Host(\`${hostname}\`)`,
-      [`traefik.http.routers.${routerName}.tls`]: 'true',
-      [`traefik.http.routers.${routerName}.tls.certresolver`]: 'letsencrypt',
+      [`traefik.http.routers.${routerName}.entrypoints`]: 'web',
       [`traefik.http.services.${routerName}.loadbalancer.server.port`]: String(internalPort),
-      // WebSocket support for HMR (P-04)
-      [`traefik.http.middlewares.${routerName}-ws.headers.customrequestheaders.Connection`]: 'Upgrade',
       // Metadata
       'gemini.managed': 'true',
       'gemini.user': containerName.split('-')[1] || 'unknown',
