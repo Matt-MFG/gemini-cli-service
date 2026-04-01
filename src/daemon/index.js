@@ -66,7 +66,7 @@ async function main() {
     const skipPaths = new Set(['/', '/health', '/ready']);
     app.addHook('onRequest', async (req, reply) => {
       if (skipPaths.has(req.url.split('?')[0])) return;
-      const key = req.headers['x-api-key'];
+      const key = req.headers['x-api-key'] || req.query?.api_key;
       if (!key) return reply.code(401).send({ error: 'X-API-Key header required' });
       if (key !== apiKey) return reply.code(403).send({ error: 'Invalid API key' });
     });

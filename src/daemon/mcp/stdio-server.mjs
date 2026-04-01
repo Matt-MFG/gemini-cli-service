@@ -14,6 +14,26 @@ import http from 'node:http';
 
 const DAEMON_URL = process.env.DAEMON_URL || 'http://localhost:3100';
 const USER_ID = process.env.GEMINI_USER_ID || 'web-user';
+const APPROVAL_MODE = process.env.APPROVAL_MODE === 'true';
+
+// Tools that require approval before execution
+const APPROVAL_REQUIRED = new Set(['apps_create', 'apps_stop', 'apps_exec']);
+
+/**
+ * Request approval from the user via the daemon's approval gate.
+ * Blocks until user approves or rejects (or timeout).
+ */
+async function requestApproval(toolName, args) {
+  if (!APPROVAL_MODE) return { approved: true };
+  if (!APPROVAL_REQUIRED.has(toolName)) return { approved: true };
+
+  const result = await daemonRequest('POST', '/approvals/request', {
+    user_id: USER_ID,
+    action: toolName,
+    description: `${toolName}(${JSON.stringify(args)})`,
+  });
+  return result;
+}
 
 // HTTP client for daemon API
 function daemonRequest(method, path, body) {

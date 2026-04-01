@@ -37,6 +37,14 @@ const HTML = `<!DOCTYPE html>
   .msg.assistant { align-self:flex-start; background:#1e1e2e; color:#ddd; border:1px solid #333; }
   .msg.system { align-self:center; color:#888; font-size:12px; font-style:italic; }
   .msg.tool { align-self:flex-start; background:#1a2a1a; color:#8c8; font-size:12px; border:1px solid #2a3a2a; font-family:monospace; }
+  .msg.approval { align-self:flex-start; background:#2a2a1a; color:#ee8; border:1px solid #444422; padding:12px; }
+  .msg.approval .approval-actions { margin-top:8px; display:flex; gap:8px; }
+  .msg.approval button { padding:6px 16px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:600; }
+  .msg.approval .btn-approve { background:#2a5a2a; color:#8f8; border:1px solid #3a6a3a; }
+  .msg.approval .btn-approve:hover { background:#3a6a3a; }
+  .msg.approval .btn-reject { background:#5a2a2a; color:#f88; border:1px solid #6a3a3a; }
+  .msg.approval .btn-reject:hover { background:#6a3a3a; }
+  .msg.approval .resolved { color:#888; font-style:italic; }
   .msg .meta { font-size:11px; color:#666; margin-top:4px; }
   #input-area { padding:12px 20px; background:#1a1a2e; border-top:1px solid #333; display:flex; gap:8px; }
   #input { flex:1; background:#0f0f1f; color:#e0e0e0; border:1px solid #444; border-radius:8px; padding:10px 14px; font-size:14px; font-family:inherit; resize:none; outline:none; }
@@ -284,6 +292,59 @@ async function checkHealth() {
   }
 }
 
+// --- Approval Gate ---
+
+function subscribeApprovals() {
+  if (!apiKey) return;
+  const es = new EventSource(API + '/approvals/subscribe?api_key=' + apiKey);
+  es.addEventListener('approval_request', (e) => {
+    const req = JSON.parse(e.data);
+    showApprovalRequest(req);
+  });
+  es.addEventListener('approved', (e) => {
+    const data = JSON.parse(e.data);
+    resolveApproval(data.requestId, 'Approved');
+  });
+  es.addEventListener('rejected', (e) => {
+    const data = JSON.parse(e.data);
+    resolveApproval(data.requestId, 'Rejected');
+  });
+  es.addEventListener('timeout', (e) => {
+    const data = JSON.parse(e.data);
+    resolveApproval(data.requestId, 'Timed out');
+  });
+  es.onerror = () => { setTimeout(subscribeApprovals, 5000); };
+}
+
+function showApprovalRequest(req) {
+  const el = document.createElement('div');
+  el.className = 'msg approval';
+  el.id = 'approval-' + req.requestId;
+  el.innerHTML = '<div><strong>Approval Required:</strong> ' + escHtml(req.action) + '</div>' +
+    '<div style="font-size:12px;color:#aaa;margin-top:4px;font-family:monospace;">' + escHtml(req.description).slice(0, 300) + '</div>' +
+    '<div class="approval-actions">' +
+    '<button class="btn-approve" onclick="handleApproval(\\'' + req.requestId + '\\', true)">Approve</button>' +
+    '<button class="btn-reject" onclick="handleApproval(\\'' + req.requestId + '\\', false)">Reject</button>' +
+    '</div>';
+  $msgs.appendChild(el);
+  $msgs.scrollTop = $msgs.scrollHeight;
+}
+
+function resolveApproval(requestId, status) {
+  const el = document.getElementById('approval-' + requestId);
+  if (!el) return;
+  const actions = el.querySelector('.approval-actions');
+  if (actions) actions.innerHTML = '<span class="resolved">' + status + '</span>';
+}
+
+async function handleApproval(requestId, approve) {
+  const endpoint = approve ? '/approvals/' + requestId + '/approve' : '/approvals/' + requestId + '/reject';
+  await authFetch(API + endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+}
+
+// Make handleApproval available globally for onclick
+window.handleApproval = handleApproval;
+
 // --- File Browser ---
 
 $('toggle-files').addEventListener('click', () => {
@@ -372,6 +433,7 @@ if (!ensureAuth()) {
 checkHealth();
 setInterval(checkHealth, 30000);
 loadConversations();
+subscribeApprovals();
 addMsg('system', 'Welcome to Gemini CLI as a Service. Type a message to start. Click "Files" to browse the VM filesystem.');
 }
 </script>
