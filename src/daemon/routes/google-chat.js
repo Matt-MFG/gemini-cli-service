@@ -21,7 +21,9 @@ let chatClient = null;
 
 async function getChatClient() {
   if (chatClient) return chatClient;
+  const keyFile = process.env.GOOGLE_CHAT_SA_KEY || '/opt/gemini-cli-service/chat-sa-key.json';
   const auth = new google.auth.GoogleAuth({
+    keyFile,
     scopes: ['https://www.googleapis.com/auth/chat.bot'],
   });
   chatClient = google.chat({ version: 'v1', auth });
