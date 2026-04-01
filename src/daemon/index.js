@@ -24,6 +24,7 @@ const appRoutes = require('./routes/apps');
 const approvalRoutes = require('./routes/approvals');
 const webRoutes = require('./routes/web');
 const fileRoutes = require('./routes/files');
+const googleChatRoutes = require('./routes/google-chat');
 
 const startTime = Date.now();
 
@@ -63,7 +64,7 @@ async function main() {
   // Auth: API key check on all routes except /, /health, /ready (F-30)
   const apiKey = process.env.API_KEY;
   if (apiKey) {
-    const skipPaths = new Set(['/', '/health', '/ready']);
+    const skipPaths = new Set(['/', '/health', '/ready', '/chat/google']);
     app.addHook('onRequest', async (req, reply) => {
       if (skipPaths.has(req.url.split('?')[0])) return;
       const key = req.headers['x-api-key'] || req.query?.api_key;
@@ -89,6 +90,7 @@ async function main() {
   await app.register(approvalRoutes, deps);
   await app.register(webRoutes, deps);
   await app.register(fileRoutes, deps);
+  await app.register(googleChatRoutes, deps);
 
   // Global error handler
   app.setErrorHandler((err, _req, reply) => {
