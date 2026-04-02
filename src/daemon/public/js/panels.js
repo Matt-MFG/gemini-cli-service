@@ -192,7 +192,12 @@ export function loadLocalState() {
     const raw = localStorage.getItem(key);
     if (raw) {
       const panels = JSON.parse(raw);
-      panels.forEach(function(p) { openPanel(p.id, p.name, p.url); });
+      // Only restore panels with valid app URLs (skip stale/broken ones)
+      panels.forEach(function(p) {
+        if (p.url && (p.url.includes('.nip.io') || p.url.includes('localhost:8'))) {
+          openPanel(p.id, p.name, p.url);
+        }
+      });
     }
   } catch(e) { /* ignore */ }
 }

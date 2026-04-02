@@ -93,13 +93,18 @@ header h1 {
   border-color: var(--color-accent);
 }
 
-/* ====== MAIN 3-ZONE GRID ====== */
+/* ====== MAIN GRID ====== */
+/* sidebar | file-explorer | chat | resize-handle | right-panels */
 .main {
   flex: 1;
-  display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  display: flex;
   overflow: hidden;
   min-height: 0;
+}
+
+.main > .chat-panel {
+  flex: 1;
+  min-width: 300px;
 }
 
 /* ====== LEFT SIDEBAR ====== */
@@ -834,6 +839,7 @@ pre:hover .copy-btn {
   flex-shrink: 0;
   overflow: hidden;
   max-width: 60vw;
+  min-width: 0;
 }
 
 .right-panel {
