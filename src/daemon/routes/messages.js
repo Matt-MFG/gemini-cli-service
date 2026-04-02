@@ -100,7 +100,11 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
 
           // Capture CLI session ID from init event for future --resume
           if (event.type === EVENT_TYPES.INIT && event.session_id) {
-            sessionManager.setCliSessionId(user_id, conversation_id, event.session_id);
+            try {
+              sessionManager.setCliSessionId(user_id, conversation_id, event.session_id);
+            } catch (err) {
+              log.warn({ err: err.message, conversation_id }, 'Failed to store CLI session ID');
+            }
           }
 
           // Record token usage from result events (real CLI nests under stats)
@@ -166,7 +170,7 @@ function ensureSession(sessionManager, userId, conversationId, text) {
   try {
     return sessionManager.getSessionId(userId, conversationId);
   } catch {
-    const { sessionPath } = sessionManager.create(userId);
+    const { sessionPath } = sessionManager.create(userId, conversationId);
     return sessionPath;
   }
 }
