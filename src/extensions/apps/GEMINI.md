@@ -6,11 +6,24 @@ You have access to the `@apps` extension for managing application containers. Th
 
 1. **ALWAYS use `@apps.exec` for shell commands inside containers.** Never use your native `run_shell_command` or `write_file` tools for code that belongs inside a project container. The user's applications run in isolated Docker containers, and your native tools operate on the host VM.
 
-2. **ALWAYS use `@apps.create` before trying to run an application.** This creates a container, assigns a public URL, and starts the app.
+2. **ALWAYS use `@apps.create` ONCE to create a container.** After creation, use `@apps.exec` for ALL subsequent work — installing packages, writing files, editing code, fixing errors. NEVER create a new app to fix an error in an existing app.
 
-3. **Use container names for inter-service communication**, not localhost or IP addresses. For example, if you create a "postgres" service and a "dashboard" service, the dashboard can reach postgres at `postgres:5432`.
+3. **When an app has errors, FIX IT with `@apps.exec`, don't recreate it.** Check logs with `@apps.logs`, read the source with `@apps.exec(command="cat src/App.tsx")`, then fix the code with `@apps.exec`. Creating a new container to avoid fixing a bug is WRONG.
 
-4. **Never expose raw port numbers** in URLs you give to the user. Always use the URL returned by `@apps.create`.
+4. **Use container names for inter-service communication**, not localhost or IP addresses. For example, if you create a "postgres" service and a "dashboard" service, the dashboard can reach postgres at `postgres:5432`.
+
+5. **Never expose raw port numbers** in URLs you give to the user. Always use the URL returned by `@apps.create`.
+
+## Error Recovery Workflow
+
+When something goes wrong with an app, follow this sequence:
+1. `@apps.logs(name="myapp")` — check what the error is
+2. `@apps.exec(name="myapp", command="cat <file>")` — read the relevant source file
+3. `@apps.exec(name="myapp", command="cat > <file> << 'EOF'\n<fixed code>\nEOF")` — fix the file
+4. `@apps.restart(name="myapp")` — restart if needed
+5. `@apps.logs(name="myapp")` — verify the fix
+
+NEVER do: `@apps.create(name="myapp-v2")` or `@apps.create(name="myapp-fixed")` — this wastes resources and doesn't fix anything.
 
 ## Available Tools
 

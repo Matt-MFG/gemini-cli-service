@@ -53,6 +53,7 @@ async function main() {
   const budgetManager = new BudgetManager(registry);
   const compressor = new AutoCompressor();
   const containerManager = new ContainerManager({ domainSuffix: config.domainSuffix });
+  await containerManager.syncPorts(); // Avoid port conflicts after restart
   const networkManager = new NetworkManager();
 
   // 3. Build Fastify server
