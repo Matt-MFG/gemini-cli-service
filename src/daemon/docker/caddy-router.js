@@ -153,7 +153,10 @@ class CaddyRouter {
     });
 
     return {
-      admin: { listen: 'localhost:2019' },
+      admin: {
+        listen: 'localhost:2019',
+        origins: ['localhost:2019', '127.0.0.1:2019', '[::1]:2019'],
+      },
       apps: {
         http: {
           servers: {
