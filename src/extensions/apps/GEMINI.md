@@ -84,6 +84,15 @@ apps_compose(name="myproject", services={
 
 Do NOT set `start_command` to `npm run dev` or `npm start` — the container will restart in a loop because there's no code yet.
 
+### Building a simple static website (nginx)
+For static sites, use `nginx:alpine` with NO start_command — nginx starts automatically.
+
+1. `apps_create(name="my-site", image="nginx:alpine", port=80)`  — NO start_command!
+2. `apps_exec(name="my-site", command="cat > /usr/share/nginx/html/index.html << 'EOF'\n<html>...</html>\nEOF")`
+3. The site is immediately live at the returned URL
+
+Do NOT set `start_command="sleep infinity"` for nginx — it overrides nginx's startup. If you accidentally did, run: `apps_exec(name="my-site", command="nginx -g 'daemon off;' &")`
+
 ### App with database
 1. `apps_compose(name="myapp", services={...})`
 2. Use `apps_exec(name="myapp-web", command="...")` for app code

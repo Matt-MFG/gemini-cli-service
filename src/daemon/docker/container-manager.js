@@ -84,9 +84,11 @@ class ContainerManager {
       },
     };
 
-    if (startCommand) {
+    if (startCommand && startCommand !== 'default') {
       createOpts.Cmd = ['sh', '-c', startCommand];
     }
+    // If no startCommand and image has a known default (nginx, httpd),
+    // don't override — let the image's CMD run
 
     // Pull image if not available
     await this._ensureImage(image);
