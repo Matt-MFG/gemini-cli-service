@@ -858,31 +858,47 @@ function renderSelectionList(header, body, data, label) {
 }
 
 function renderTokenUsage(header, body, data, label) {
-  header.textContent = label || 'Token Usage';
+  header.textContent = (data.summary ? data.summary : (label || 'Token Usage'));
   var grid = document.createElement('div');
   grid.className = 'token-grid';
 
-  var fields = [
-    {key: 'input_tokens', label: 'Input'},
-    {key: 'output_tokens', label: 'Output'},
-    {key: 'cache_read_tokens', label: 'Cached'},
-    {key: 'total_tokens', label: 'Total'},
-    {key: 'cost_usd', label: 'Cost (USD)', fmt: function(v) { return '$' + Number(v).toFixed(4); }},
-  ];
-
-  fields.forEach(function(f) {
-    if (data[f.key] == null) return;
-    var card = document.createElement('div');
-    card.className = 'token-card';
-    var val = document.createElement('div');
-    val.className = 'token-val';
-    val.textContent = f.fmt ? f.fmt(data[f.key]) : Number(data[f.key]).toLocaleString();
-    var lbl = document.createElement('div');
-    lbl.className = 'token-label';
-    lbl.textContent = f.label;
-    card.appendChild(val); card.appendChild(lbl);
-    grid.appendChild(card);
-  });
+  // Handle metrics array format from backend A2UI detector
+  if (data.metrics && Array.isArray(data.metrics)) {
+    data.metrics.forEach(function(m) {
+      var card = document.createElement('div');
+      card.className = 'token-card';
+      var val = document.createElement('div');
+      val.className = 'token-val';
+      val.textContent = m.value || '0';
+      var lbl = document.createElement('div');
+      lbl.className = 'token-label';
+      lbl.textContent = m.label || '';
+      card.appendChild(val); card.appendChild(lbl);
+      grid.appendChild(card);
+    });
+  } else {
+    // Flat fields format
+    var fields = [
+      {key: 'input_tokens', label: 'Input'},
+      {key: 'output_tokens', label: 'Output'},
+      {key: 'cache_read_tokens', label: 'Cached'},
+      {key: 'total_tokens', label: 'Total'},
+      {key: 'cost_usd', label: 'Cost', fmt: function(v) { return '$' + Number(v).toFixed(4); }},
+    ];
+    fields.forEach(function(f) {
+      if (data[f.key] == null) return;
+      var card = document.createElement('div');
+      card.className = 'token-card';
+      var val = document.createElement('div');
+      val.className = 'token-val';
+      val.textContent = f.fmt ? f.fmt(data[f.key]) : Number(data[f.key]).toLocaleString();
+      var lbl = document.createElement('div');
+      lbl.className = 'token-label';
+      lbl.textContent = f.label;
+      card.appendChild(val); card.appendChild(lbl);
+      grid.appendChild(card);
+    });
+  }
   body.appendChild(grid);
 }
 
@@ -1064,13 +1080,19 @@ function handleSSEEvent(ev, asst, setContent) {
     addSystemMsg(ev.message || 'System warning');
 
   } else if (ev.type === 'a2ui') {
-    // Backend sends a2ui events directly (not nested under ev.data)
-    if (ev.component === 'table' || ev.template === 'table') {
+    // Backend sends a2ui events directly
+    if (ev.component === 'app_inventory') {
+      // Convert rows back to apps objects for the card renderer
+      var apps = (ev.rows || []).map(function(r) {
+        return { name: r[0], status: (r[1] || '').indexOf('Running') >= 0 ? 'running' : 'stopped', url: r[2], port: r[3] };
+      });
+      renderA2uiPanel('app_inventory', {apps: apps}, ev.title || 'Running Applications');
+    } else if (ev.component === 'stats') {
+      renderA2uiPanel('token_usage', ev, ev.title || 'Token Usage');
+    } else if (ev.component === 'table') {
       renderA2uiPanel('table', ev, ev.title || 'Table');
-    } else if (ev.component === 'app_inventory') {
-      renderA2uiPanel('app_inventory', ev, ev.title || 'Running Applications');
     } else if (ev.component === 'app_created') {
-      renderA2uiPanel('app_created', ev, ev.title || 'App Created');
+      addSystemMsg('App created: ' + (ev.name || '') + ' — ' + (ev.url || ''));
     } else {
       var tmpl = ev.component || ev.template || 'table';
       renderA2uiPanel(tmpl, ev, ev.title || ev.label || tmpl);
