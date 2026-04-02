@@ -33,7 +33,7 @@ class SessionManager {
     const metadata = {
       conversationId,
       userId,
-      name: name || null,
+      name: nameOrId || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       turnCount: 0,
