@@ -1,0 +1,783 @@
+{
+  "version": "1.0",
+  "apps": {
+    "outline": {
+      "name": "outline",
+      "displayName": "Outline",
+      "description": "Team wiki and knowledge base",
+      "category": "wiki",
+      "image": "outlinewiki/outline:latest",
+      "harness": {
+        "requires": ["postgres", "redis", "minio", "sso"],
+        "postgres": { "database": "outline" },
+        "redis": { "db": 1 },
+        "minio": { "bucket": "outline-data" },
+        "sso": {
+          "clientId": "outline",
+          "redirectUri": "/auth/oidc.callback",
+          "scopes": ["openid", "profile", "email"]
+        }
+      },
+      "env": {
+        "SECRET_KEY": "{{generate:hex:32}}",
+        "UTILS_SECRET": "{{generate:hex:32}}",
+        "DATABASE_URL": "{{harness.postgres.url}}/outline",
+        "REDIS_URL": "{{harness.redis.url}}/1",
+        "AWS_ACCESS_KEY_ID": "{{harness.minio.user}}",
+        "AWS_SECRET_ACCESS_KEY": "{{harness.minio.password}}",
+        "AWS_S3_UPLOAD_BUCKET_URL": "{{harness.minio.url}}/outline-data",
+        "AWS_S3_UPLOAD_BUCKET_NAME": "outline-data",
+        "AWS_S3_FORCE_PATH_STYLE": "true",
+        "AWS_S3_ACL": "private",
+        "OIDC_CLIENT_ID": "outline",
+        "OIDC_CLIENT_SECRET": "{{generate:hex:32}}",
+        "OIDC_AUTH_URI": "{{harness.authelia.url}}/api/oidc/authorization",
+        "OIDC_TOKEN_URI": "{{harness.authelia.url}}/api/oidc/token",
+        "OIDC_USERINFO_URI": "{{harness.authelia.url}}/api/oidc/userinfo",
+        "OIDC_DISPLAY_NAME": "Harness SSO",
+        "URL": "http://outline.{{domain}}",
+        "FORCE_HTTPS": "false",
+        "PGSSLMODE": "disable"
+      },
+      "ports": { "internal": 3000 },
+      "volumes": { "data": "/opt/outline/data" },
+      "healthCheck": { "path": "/_health", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "OUTLINE_API_TOKEN": "API token for Outline REST API",
+          "OUTLINE_URL": "Base URL for Outline",
+          "OUTLINE_DB_URL": "PostgreSQL connection string for Outline database"
+        },
+        "aliases": {
+          "outline-search": "curl -s -H \"Authorization: Bearer $OUTLINE_API_TOKEN\" \"$OUTLINE_URL/api/documents.search\" -d \"{\\\"query\\\": \\\"$1\\\"}\" | jq '.data[] | {title: .document.title, id: .document.id}'",
+          "outline-docs": "curl -s -H \"Authorization: Bearer $OUTLINE_API_TOKEN\" \"$OUTLINE_URL/api/documents.list\" -d '{\"limit\": 25}' | jq '.data[] | {title: .title, id: .id}'"
+        },
+        "examples": [
+          "curl -s -H \"Authorization: Bearer $OUTLINE_API_TOKEN\" \"$OUTLINE_URL/api/documents.create\" -H 'Content-Type: application/json' -d '{\"title\": \"My Doc\", \"text\": \"Content here\", \"publish\": true}'",
+          "psql -d outline -c \"SELECT title, created_at FROM documents ORDER BY created_at DESC LIMIT 10;\""
+        ],
+        "database": "outline"
+      }
+    },
+
+    "plausible": {
+      "name": "plausible",
+      "displayName": "Plausible Analytics",
+      "description": "Privacy-friendly web analytics",
+      "category": "analytics",
+      "image": "ghcr.io/plausible/community-edition:v2",
+      "harness": {
+        "requires": ["postgres"],
+        "postgres": { "database": "plausible" }
+      },
+      "env": {
+        "DATABASE_URL": "postgres://harness:{{harness.postgres.password}}@harness-postgres:5432/plausible",
+        "BASE_URL": "http://plausible.{{domain}}",
+        "SECRET_KEY_BASE": "{{generate:hex:64}}",
+        "TOTP_VAULT_KEY": "{{generate:base64:32}}",
+        "DISABLE_REGISTRATION": "invite_only"
+      },
+      "ports": { "internal": 8000 },
+      "healthCheck": { "path": "/api/health", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "PLAUSIBLE_API_TOKEN": "API token for Plausible (create in Settings > API Keys)",
+          "PLAUSIBLE_URL": "Base URL for Plausible",
+          "PLAUSIBLE_DB_URL": "PostgreSQL connection string for Plausible database"
+        },
+        "aliases": {
+          "plausible-stats": "curl -s -H \"Authorization: Bearer $PLAUSIBLE_API_TOKEN\" \"$PLAUSIBLE_URL/api/v1/stats/aggregate?site_id=$PLAUSIBLE_SITE_ID&period=$1&metrics=visitors,pageviews,bounce_rate\" | jq '.results'",
+          "plausible-pages": "curl -s -H \"Authorization: Bearer $PLAUSIBLE_API_TOKEN\" \"$PLAUSIBLE_URL/api/v1/stats/breakdown?site_id=$PLAUSIBLE_SITE_ID&period=7d&property=event:page&limit=10\" | jq '.results'"
+        },
+        "examples": [
+          "plausible-stats 7d",
+          "psql -d plausible -c \"SELECT count(*) FROM events WHERE timestamp > now() - interval '24 hours';\""
+        ],
+        "database": "plausible"
+      }
+    },
+
+    "uptimekuma": {
+      "name": "uptimekuma",
+      "displayName": "Uptime Kuma",
+      "description": "Self-hosted monitoring tool",
+      "category": "monitoring",
+      "image": "louislam/uptime-kuma:1",
+      "harness": {
+        "requires": []
+      },
+      "env": {},
+      "ports": { "internal": 3001 },
+      "volumes": { "data": "/app/data" },
+      "healthCheck": { "path": "/api/status-page/heartbeat/default", "interval": 30 },
+      "cli": {
+        "tools": ["curl", "jq"],
+        "envDoc": {
+          "UPTIMEKUMA_URL": "Base URL for Uptime Kuma",
+          "UPTIMEKUMA_API_TOKEN": "API token (create in Settings > API Keys)"
+        },
+        "aliases": {
+          "kuma-status": "curl -s -H \"Authorization: $UPTIMEKUMA_API_TOKEN\" \"$UPTIMEKUMA_URL/api/status-page/heartbeat/default\" | jq"
+        },
+        "examples": [
+          "curl -s \"$UPTIMEKUMA_URL/api/status-page/heartbeat/default\" | jq '.heartbeatList | to_entries[] | {name: .key, status: .value[-1].status}'"
+        ]
+      }
+    },
+
+    "gitea": {
+      "name": "gitea",
+      "displayName": "Gitea",
+      "description": "Lightweight Git hosting",
+      "category": "code",
+      "image": "gitea/gitea:latest",
+      "harness": {
+        "requires": ["postgres"],
+        "postgres": { "database": "gitea" }
+      },
+      "env": {
+        "GITEA__database__DB_TYPE": "postgres",
+        "GITEA__database__HOST": "harness-postgres:5432",
+        "GITEA__database__NAME": "gitea",
+        "GITEA__database__USER": "harness",
+        "GITEA__database__PASSWD": "{{harness.postgres.password}}",
+        "GITEA__server__ROOT_URL": "http://gitea.{{domain}}",
+        "GITEA__server__DOMAIN": "gitea.{{domain}}",
+        "GITEA__server__SSH_DOMAIN": "gitea.{{domain}}",
+        "GITEA__security__SECRET_KEY": "{{generate:hex:32}}",
+        "GITEA__security__INTERNAL_TOKEN": "{{generate:hex:64}}"
+      },
+      "ports": { "internal": 3000, "ssh": 2222 },
+      "volumes": { "data": "/data" },
+      "healthCheck": { "path": "/api/healthz", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "installCli": "tea",
+        "envDoc": {
+          "GITEA_API_TOKEN": "API token for Gitea REST API",
+          "GITEA_URL": "Base URL for Gitea",
+          "GITEA_DB_URL": "PostgreSQL connection string for Gitea database"
+        },
+        "aliases": {
+          "gitea-repos": "tea repo list",
+          "gitea-create-repo": "tea repo create --name \"$1\"",
+          "gitea-issues": "tea issue list"
+        },
+        "examples": [
+          "tea repo create --name api-server --description 'Backend API'",
+          "tea repo list",
+          "psql -d gitea -c \"SELECT name, is_private, num_stars FROM repository ORDER BY updated_unix DESC LIMIT 10;\""
+        ],
+        "database": "gitea"
+      }
+    },
+
+    "n8n": {
+      "name": "n8n",
+      "displayName": "n8n",
+      "description": "Workflow automation platform",
+      "category": "automation",
+      "image": "n8nio/n8n:latest",
+      "harness": {
+        "requires": ["postgres"],
+        "postgres": { "database": "n8n" }
+      },
+      "env": {
+        "DB_TYPE": "postgresdb",
+        "DB_POSTGRESDB_HOST": "harness-postgres",
+        "DB_POSTGRESDB_PORT": "5432",
+        "DB_POSTGRESDB_DATABASE": "n8n",
+        "DB_POSTGRESDB_USER": "harness",
+        "DB_POSTGRESDB_PASSWORD": "{{harness.postgres.password}}",
+        "N8N_HOST": "n8n.{{domain}}",
+        "N8N_PORT": "5678",
+        "N8N_PROTOCOL": "http",
+        "WEBHOOK_URL": "http://n8n.{{domain}}/",
+        "N8N_ENCRYPTION_KEY": "{{generate:hex:32}}"
+      },
+      "ports": { "internal": 5678 },
+      "volumes": { "data": "/home/node/.n8n" },
+      "healthCheck": { "path": "/healthz", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "N8N_API_KEY": "API key for n8n REST API",
+          "N8N_URL": "Base URL for n8n"
+        },
+        "aliases": {
+          "n8n-workflows": "curl -s -H \"X-N8N-API-KEY: $N8N_API_KEY\" \"$N8N_URL/api/v1/workflows\" | jq '.data[] | {name: .name, active: .active, id: .id}'",
+          "n8n-executions": "curl -s -H \"X-N8N-API-KEY: $N8N_API_KEY\" \"$N8N_URL/api/v1/executions?limit=10\" | jq '.data[] | {id: .id, status: .status, workflowName: .workflowData.name}'"
+        },
+        "examples": [
+          "n8n-workflows",
+          "curl -s -H \"X-N8N-API-KEY: $N8N_API_KEY\" \"$N8N_URL/api/v1/workflows\" | jq '.data | length'",
+          "psql -d n8n -c \"SELECT name, active FROM workflow_entity ORDER BY updated_at DESC LIMIT 10;\""
+        ],
+        "database": "n8n"
+      }
+    },
+
+    "bookstack": {
+      "name": "bookstack",
+      "displayName": "BookStack",
+      "description": "Wiki and documentation platform",
+      "category": "wiki",
+      "image": "linuxserver/bookstack",
+      "harness": {
+        "requires": ["postgres"],
+        "postgres": { "database": "bookstack" }
+      },
+      "env": {
+        "APP_URL": "http://bookstack.{{domain}}",
+        "DB_HOST": "harness-postgres",
+        "DB_PORT": "5432",
+        "DB_DATABASE": "bookstack",
+        "DB_USERNAME": "harness",
+        "DB_PASSWORD": "{{harness.postgres.password}}",
+        "APP_KEY": "{{generate:base64:32}}"
+      },
+      "ports": { "internal": 6875 },
+      "volumes": { "config": "/config" },
+      "healthCheck": { "path": "/login", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "BOOKSTACK_TOKEN_ID": "API token ID (create in Settings > API Tokens)",
+          "BOOKSTACK_TOKEN_SECRET": "API token secret",
+          "BOOKSTACK_URL": "Base URL for BookStack"
+        },
+        "aliases": {
+          "bookstack-books": "curl -s -H \"Authorization: Token $BOOKSTACK_TOKEN_ID:$BOOKSTACK_TOKEN_SECRET\" \"$BOOKSTACK_URL/api/books\" | jq '.data[] | {id: .id, name: .name}'",
+          "bookstack-pages": "curl -s -H \"Authorization: Token $BOOKSTACK_TOKEN_ID:$BOOKSTACK_TOKEN_SECRET\" \"$BOOKSTACK_URL/api/pages\" | jq '.data[] | {id: .id, name: .name}'"
+        },
+        "examples": [
+          "bookstack-books",
+          "psql -d bookstack -c \"SELECT name, updated_at FROM pages ORDER BY updated_at DESC LIMIT 10;\""
+        ],
+        "database": "bookstack"
+      }
+    },
+
+    "plane": {
+      "name": "plane",
+      "displayName": "Plane",
+      "description": "Project management and issue tracking",
+      "category": "project-management",
+      "image": "makeplane/plane-frontend:latest",
+      "harness": {
+        "requires": ["postgres", "redis"],
+        "postgres": { "database": "plane" },
+        "redis": { "db": 2 }
+      },
+      "env": {
+        "DATABASE_URL": "postgres://harness:{{harness.postgres.password}}@harness-postgres:5432/plane",
+        "REDIS_URL": "{{harness.redis.url}}/2",
+        "SECRET_KEY": "{{generate:hex:32}}",
+        "WEB_URL": "http://plane.{{domain}}"
+      },
+      "ports": { "internal": 3000 },
+      "volumes": { "data": "/app/data" },
+      "healthCheck": { "path": "/", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "PLANE_API_TOKEN": "API token for Plane",
+          "PLANE_URL": "Base URL for Plane"
+        },
+        "aliases": {
+          "plane-projects": "curl -s -H \"X-API-Key: $PLANE_API_TOKEN\" \"$PLANE_URL/api/v1/workspaces/default/projects/\" | jq '.results[] | {name: .name, id: .id}'",
+          "plane-issues": "curl -s -H \"X-API-Key: $PLANE_API_TOKEN\" \"$PLANE_URL/api/v1/workspaces/default/projects/$1/issues/\" | jq '.results[] | {name: .name, state: .state_detail.name}'"
+        },
+        "examples": [
+          "plane-projects",
+          "psql -d plane -c \"SELECT name, created_at FROM projects ORDER BY created_at DESC LIMIT 10;\""
+        ],
+        "database": "plane"
+      }
+    },
+
+    "vikunja": {
+      "name": "vikunja",
+      "displayName": "Vikunja",
+      "description": "Task and project management",
+      "category": "project-management",
+      "image": "vikunja/vikunja:latest",
+      "harness": {
+        "requires": ["postgres"],
+        "postgres": { "database": "vikunja" }
+      },
+      "env": {
+        "VIKUNJA_DATABASE_TYPE": "postgres",
+        "VIKUNJA_DATABASE_HOST": "harness-postgres",
+        "VIKUNJA_DATABASE_DATABASE": "vikunja",
+        "VIKUNJA_DATABASE_USER": "harness",
+        "VIKUNJA_DATABASE_PASSWORD": "{{harness.postgres.password}}",
+        "VIKUNJA_SERVICE_FRONTENDURL": "http://vikunja.{{domain}}"
+      },
+      "ports": { "internal": 3456 },
+      "volumes": { "data": "/app/vikunja/files" },
+      "healthCheck": { "path": "/api/v1/info", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "VIKUNJA_API_TOKEN": "API token for Vikunja",
+          "VIKUNJA_URL": "Base URL for Vikunja"
+        },
+        "aliases": {
+          "vikunja-projects": "curl -s -H \"Authorization: Bearer $VIKUNJA_API_TOKEN\" \"$VIKUNJA_URL/api/v1/projects\" | jq '.[] | {id: .id, title: .title}'",
+          "vikunja-tasks": "curl -s -H \"Authorization: Bearer $VIKUNJA_API_TOKEN\" \"$VIKUNJA_URL/api/v1/tasks/all\" | jq '.[] | {id: .id, title: .title, done: .done}'"
+        },
+        "examples": [
+          "vikunja-projects",
+          "psql -d vikunja -c \"SELECT title, done, due_date FROM tasks ORDER BY created DESC LIMIT 10;\""
+        ],
+        "database": "vikunja"
+      }
+    },
+
+    "ghost": {
+      "name": "ghost",
+      "displayName": "Ghost",
+      "description": "CMS and blogging platform",
+      "category": "cms",
+      "image": "ghost:5-alpine",
+      "harness": {
+        "requires": ["postgres"],
+        "postgres": { "database": "ghost" }
+      },
+      "env": {
+        "database__client": "postgres",
+        "database__connection__host": "harness-postgres",
+        "database__connection__port": "5432",
+        "database__connection__database": "ghost",
+        "database__connection__user": "harness",
+        "database__connection__password": "{{harness.postgres.password}}",
+        "url": "http://ghost.{{domain}}"
+      },
+      "ports": { "internal": 2368 },
+      "volumes": { "content": "/var/lib/ghost/content" },
+      "healthCheck": { "path": "/ghost/api/admin/site/", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "GHOST_ADMIN_API_KEY": "Admin API key (create in Settings > Integrations)",
+          "GHOST_URL": "Base URL for Ghost"
+        },
+        "aliases": {
+          "ghost-posts": "curl -s \"$GHOST_URL/ghost/api/admin/posts/?key=$GHOST_ADMIN_API_KEY\" | jq '.posts[] | {title: .title, status: .status, id: .id}'",
+          "ghost-tags": "curl -s \"$GHOST_URL/ghost/api/admin/tags/?key=$GHOST_ADMIN_API_KEY\" | jq '.tags[] | {name: .name, slug: .slug}'"
+        },
+        "examples": [
+          "ghost-posts",
+          "psql -d ghost -c \"SELECT title, status, published_at FROM posts ORDER BY created_at DESC LIMIT 10;\""
+        ],
+        "database": "ghost"
+      }
+    },
+
+    "directus": {
+      "name": "directus",
+      "displayName": "Directus",
+      "description": "Headless CMS and data platform",
+      "category": "cms",
+      "image": "directus/directus:latest",
+      "harness": {
+        "requires": ["postgres"],
+        "postgres": { "database": "directus" }
+      },
+      "env": {
+        "DB_CLIENT": "pg",
+        "DB_HOST": "harness-postgres",
+        "DB_PORT": "5432",
+        "DB_DATABASE": "directus",
+        "DB_USER": "harness",
+        "DB_PASSWORD": "{{harness.postgres.password}}",
+        "KEY": "{{generate:hex:32}}",
+        "SECRET": "{{generate:hex:32}}",
+        "PUBLIC_URL": "http://directus.{{domain}}",
+        "ADMIN_EMAIL": "admin@example.com",
+        "ADMIN_PASSWORD": "{{generate:hex:16}}"
+      },
+      "ports": { "internal": 8055 },
+      "volumes": { "uploads": "/directus/uploads" },
+      "healthCheck": { "path": "/server/health", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "DIRECTUS_TOKEN": "Static API token for Directus",
+          "DIRECTUS_URL": "Base URL for Directus"
+        },
+        "aliases": {
+          "directus-collections": "curl -s -H \"Authorization: Bearer $DIRECTUS_TOKEN\" \"$DIRECTUS_URL/collections\" | jq '.data[] | {collection: .collection, note: .meta.note}'",
+          "directus-items": "curl -s -H \"Authorization: Bearer $DIRECTUS_TOKEN\" \"$DIRECTUS_URL/items/$1\" | jq '.data'"
+        },
+        "examples": [
+          "directus-collections",
+          "psql -d directus -c \"SELECT collection, COUNT(*) FROM directus_fields GROUP BY collection;\""
+        ],
+        "database": "directus"
+      }
+    },
+
+    "nocodb": {
+      "name": "nocodb",
+      "displayName": "NocoDB",
+      "description": "Airtable alternative with spreadsheet UI",
+      "category": "database",
+      "image": "nocodb/nocodb:latest",
+      "harness": {
+        "requires": ["postgres"],
+        "postgres": { "database": "nocodb" }
+      },
+      "env": {
+        "NC_DB": "pg://harness-postgres:5432?u=harness&p={{harness.postgres.password}}&d=nocodb",
+        "NC_PUBLIC_URL": "http://nocodb.{{domain}}",
+        "NC_AUTH_JWT_SECRET": "{{generate:hex:32}}"
+      },
+      "ports": { "internal": 8080 },
+      "healthCheck": { "path": "/api/v1/health", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "NOCODB_API_TOKEN": "API token for NocoDB",
+          "NOCODB_URL": "Base URL for NocoDB"
+        },
+        "aliases": {
+          "nocodb-bases": "curl -s -H \"xc-token: $NOCODB_API_TOKEN\" \"$NOCODB_URL/api/v1/db/meta/projects/\" | jq '.list[] | {id: .id, title: .title}'",
+          "nocodb-tables": "curl -s -H \"xc-token: $NOCODB_API_TOKEN\" \"$NOCODB_URL/api/v1/db/meta/projects/$1/tables\" | jq '.list[] | {id: .id, title: .title}'"
+        },
+        "examples": [
+          "nocodb-bases",
+          "psql -d nocodb -c \"SELECT title FROM nc_projects ORDER BY created_at DESC LIMIT 10;\""
+        ],
+        "database": "nocodb"
+      }
+    },
+
+    "baserow": {
+      "name": "baserow",
+      "displayName": "Baserow",
+      "description": "No-code database and Airtable alternative",
+      "category": "database",
+      "image": "baserow/baserow:latest",
+      "harness": {
+        "requires": ["postgres", "redis"],
+        "postgres": { "database": "baserow" },
+        "redis": { "db": 3 }
+      },
+      "env": {
+        "DATABASE_HOST": "harness-postgres",
+        "DATABASE_PORT": "5432",
+        "DATABASE_NAME": "baserow",
+        "DATABASE_USER": "harness",
+        "DATABASE_PASSWORD": "{{harness.postgres.password}}",
+        "REDIS_URL": "{{harness.redis.url}}/3",
+        "BASEROW_PUBLIC_URL": "http://baserow.{{domain}}",
+        "SECRET_KEY": "{{generate:hex:32}}"
+      },
+      "ports": { "internal": 80 },
+      "volumes": { "data": "/baserow/data" },
+      "healthCheck": { "path": "/api/_health/", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "BASEROW_TOKEN": "Database token for Baserow API",
+          "BASEROW_URL": "Base URL for Baserow"
+        },
+        "aliases": {
+          "baserow-tables": "curl -s -H \"Authorization: Token $BASEROW_TOKEN\" \"$BASEROW_URL/api/database/tables/database/$1/\" | jq '.[] | {id: .id, name: .name}'",
+          "baserow-rows": "curl -s -H \"Authorization: Token $BASEROW_TOKEN\" \"$BASEROW_URL/api/database/rows/table/$1/?size=10\" | jq '.results'"
+        },
+        "examples": [
+          "baserow-tables 1",
+          "psql -d baserow -c \"SELECT name FROM database_table ORDER BY created_on DESC LIMIT 10;\""
+        ],
+        "database": "baserow"
+      }
+    },
+
+    "filebrowser": {
+      "name": "filebrowser",
+      "displayName": "File Browser",
+      "description": "Web-based file manager",
+      "category": "files",
+      "image": "filebrowser/filebrowser:latest",
+      "harness": {
+        "requires": []
+      },
+      "env": {},
+      "ports": { "internal": 80 },
+      "volumes": { "data": "/srv", "config": "/database" },
+      "healthCheck": { "path": "/health", "interval": 30 },
+      "cli": {
+        "tools": ["curl", "jq"],
+        "envDoc": {
+          "FILEBROWSER_URL": "Base URL for File Browser",
+          "FILEBROWSER_TOKEN": "JWT token (POST /api/login with username/password)"
+        },
+        "aliases": {
+          "fb-ls": "curl -s -H \"X-Auth: $FILEBROWSER_TOKEN\" \"$FILEBROWSER_URL/api/resources/$1\" | jq '.items[] | {name: .name, size: .size, type: .type}'"
+        },
+        "examples": [
+          "fb-ls /",
+          "curl -s -X POST \"$FILEBROWSER_URL/api/login\" -d '{\"username\":\"admin\",\"password\":\"admin\"}'"
+        ]
+      }
+    },
+
+    "formbricks": {
+      "name": "formbricks",
+      "displayName": "Formbricks",
+      "description": "Open-source forms and survey platform",
+      "category": "forms",
+      "image": "ghcr.io/formbricks/formbricks:latest",
+      "harness": {
+        "requires": ["postgres"],
+        "postgres": { "database": "formbricks" }
+      },
+      "env": {
+        "DATABASE_URL": "postgres://harness:{{harness.postgres.password}}@harness-postgres:5432/formbricks",
+        "NEXTAUTH_SECRET": "{{generate:hex:32}}",
+        "NEXTAUTH_URL": "http://formbricks.{{domain}}",
+        "ENCRYPTION_KEY": "{{generate:hex:32}}"
+      },
+      "ports": { "internal": 3000 },
+      "healthCheck": { "path": "/api/health", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "FORMBRICKS_API_KEY": "API key for Formbricks",
+          "FORMBRICKS_URL": "Base URL for Formbricks"
+        },
+        "aliases": {
+          "formbricks-surveys": "curl -s -H \"x-api-key: $FORMBRICKS_API_KEY\" \"$FORMBRICKS_URL/api/v1/management/surveys\" | jq '.data[] | {id: .id, name: .name, status: .status}'",
+          "formbricks-responses": "curl -s -H \"x-api-key: $FORMBRICKS_API_KEY\" \"$FORMBRICKS_URL/api/v1/management/surveys/$1/responses\" | jq '.data | length'"
+        },
+        "examples": [
+          "formbricks-surveys",
+          "psql -d formbricks -c \"SELECT name, status, created_at FROM \\\"Survey\\\" ORDER BY created_at DESC LIMIT 10;\""
+        ],
+        "database": "formbricks"
+      }
+    },
+
+    "grafana": {
+      "name": "grafana",
+      "displayName": "Grafana",
+      "description": "Monitoring and observability dashboards",
+      "category": "monitoring",
+      "image": "grafana/grafana:latest",
+      "harness": {
+        "requires": []
+      },
+      "env": {
+        "GF_SERVER_ROOT_URL": "http://grafana.{{domain}}",
+        "GF_SECURITY_ADMIN_PASSWORD": "{{generate:hex:16}}"
+      },
+      "ports": { "internal": 3000 },
+      "volumes": { "data": "/var/lib/grafana" },
+      "healthCheck": { "path": "/api/health", "interval": 30 },
+      "cli": {
+        "tools": ["curl", "jq"],
+        "envDoc": {
+          "GRAFANA_URL": "Base URL for Grafana",
+          "GRAFANA_API_KEY": "API key (create in Configuration > API Keys)"
+        },
+        "aliases": {
+          "grafana-dashboards": "curl -s -H \"Authorization: Bearer $GRAFANA_API_KEY\" \"$GRAFANA_URL/api/search?type=dash-db\" | jq '.[] | {uid: .uid, title: .title}'",
+          "grafana-datasources": "curl -s -H \"Authorization: Bearer $GRAFANA_API_KEY\" \"$GRAFANA_URL/api/datasources\" | jq '.[] | {id: .id, name: .name, type: .type}'"
+        },
+        "examples": [
+          "grafana-dashboards",
+          "curl -s -H \"Authorization: Bearer $GRAFANA_API_KEY\" \"$GRAFANA_URL/api/datasources\" | jq length"
+        ]
+      }
+    },
+
+    "activepieces": {
+      "name": "activepieces",
+      "displayName": "Activepieces",
+      "description": "No-code workflow automation",
+      "category": "automation",
+      "image": "activepieces/activepieces:latest",
+      "harness": {
+        "requires": ["postgres", "redis"],
+        "postgres": { "database": "activepieces" },
+        "redis": { "db": 4 }
+      },
+      "env": {
+        "AP_POSTGRES_DATABASE": "activepieces",
+        "AP_POSTGRES_HOST": "harness-postgres",
+        "AP_POSTGRES_PORT": "5432",
+        "AP_POSTGRES_USERNAME": "harness",
+        "AP_POSTGRES_PASSWORD": "{{harness.postgres.password}}",
+        "AP_REDIS_URL": "{{harness.redis.url}}/4",
+        "AP_FRONTEND_URL": "http://activepieces.{{domain}}",
+        "AP_ENCRYPTION_KEY": "{{generate:hex:16}}",
+        "AP_JWT_SECRET": "{{generate:hex:32}}"
+      },
+      "ports": { "internal": 8080 },
+      "healthCheck": { "path": "/api/v1/flags", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "AP_API_KEY": "API key for Activepieces",
+          "AP_URL": "Base URL for Activepieces"
+        },
+        "aliases": {
+          "ap-flows": "curl -s -H \"Authorization: Bearer $AP_API_KEY\" \"$AP_URL/api/v1/flows\" | jq '.data[] | {id: .id, name: .version.displayName, status: .status}'",
+          "ap-runs": "curl -s -H \"Authorization: Bearer $AP_API_KEY\" \"$AP_URL/api/v1/flow-runs?limit=10\" | jq '.data[] | {id: .id, status: .status, flowDisplayName: .flowDisplayName}'"
+        },
+        "examples": [
+          "ap-flows",
+          "psql -d activepieces -c \"SELECT display_name, status FROM flow ORDER BY updated DESC LIMIT 10;\""
+        ],
+        "database": "activepieces"
+      }
+    },
+
+    "stirling-pdf": {
+      "name": "stirling-pdf",
+      "displayName": "Stirling PDF",
+      "description": "PDF manipulation tools",
+      "category": "tools",
+      "image": "frooodle/s-pdf:latest",
+      "harness": {
+        "requires": []
+      },
+      "env": {
+        "DOCKER_ENABLE_SECURITY": "false"
+      },
+      "ports": { "internal": 8080 },
+      "volumes": { "data": "/usr/share/tessdata" },
+      "healthCheck": { "path": "/api/v1/general/health", "interval": 30 },
+      "cli": {
+        "tools": ["curl"],
+        "envDoc": {
+          "STIRLING_URL": "Base URL for Stirling PDF"
+        },
+        "aliases": {
+          "pdf-merge": "curl -s -X POST \"$STIRLING_URL/api/v1/general/merge-pdfs\" -F 'fileInput=@$1' -F 'fileInput=@$2' -o merged.pdf"
+        },
+        "examples": [
+          "curl -s -X POST \"$STIRLING_URL/api/v1/general/merge-pdfs\" -F 'fileInput=@file1.pdf' -F 'fileInput=@file2.pdf' -o merged.pdf"
+        ]
+      }
+    },
+
+    "docmost": {
+      "name": "docmost",
+      "displayName": "Docmost",
+      "description": "Collaborative documentation and wiki",
+      "category": "wiki",
+      "image": "docmost/docmost:latest",
+      "harness": {
+        "requires": ["postgres"],
+        "postgres": { "database": "docmost" }
+      },
+      "env": {
+        "DATABASE_URL": "postgres://harness:{{harness.postgres.password}}@harness-postgres:5432/docmost",
+        "APP_SECRET": "{{generate:hex:32}}",
+        "APP_URL": "http://docmost.{{domain}}"
+      },
+      "ports": { "internal": 3000 },
+      "volumes": { "data": "/app/data/storage" },
+      "healthCheck": { "path": "/", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "DOCMOST_TOKEN": "API token for Docmost",
+          "DOCMOST_URL": "Base URL for Docmost"
+        },
+        "aliases": {
+          "docmost-spaces": "curl -s -H \"Authorization: Bearer $DOCMOST_TOKEN\" \"$DOCMOST_URL/api/spaces\" | jq '.data[] | {id: .id, name: .name}'",
+          "docmost-pages": "curl -s -H \"Authorization: Bearer $DOCMOST_TOKEN\" \"$DOCMOST_URL/api/pages?spaceId=$1\" | jq '.data[] | {id: .id, title: .title}'"
+        },
+        "examples": [
+          "docmost-spaces",
+          "psql -d docmost -c \"SELECT title, updated_at FROM pages ORDER BY updated_at DESC LIMIT 10;\""
+        ],
+        "database": "docmost"
+      }
+    },
+
+    "paperless-ngx": {
+      "name": "paperless-ngx",
+      "displayName": "Paperless-ngx",
+      "description": "Document management with OCR",
+      "category": "documents",
+      "image": "ghcr.io/paperless-ngx/paperless-ngx:latest",
+      "harness": {
+        "requires": ["postgres", "redis"],
+        "postgres": { "database": "paperless" },
+        "redis": { "db": 5 }
+      },
+      "env": {
+        "PAPERLESS_DBHOST": "harness-postgres",
+        "PAPERLESS_DBPORT": "5432",
+        "PAPERLESS_DBNAME": "paperless",
+        "PAPERLESS_DBUSER": "harness",
+        "PAPERLESS_DBPASS": "{{harness.postgres.password}}",
+        "PAPERLESS_REDIS": "{{harness.redis.url}}/5",
+        "PAPERLESS_URL": "http://paperless.{{domain}}",
+        "PAPERLESS_SECRET_KEY": "{{generate:hex:32}}",
+        "PAPERLESS_ADMIN_USER": "admin",
+        "PAPERLESS_ADMIN_PASSWORD": "{{generate:hex:16}}"
+      },
+      "ports": { "internal": 8000 },
+      "volumes": { "data": "/usr/src/paperless/data", "media": "/usr/src/paperless/media", "consume": "/usr/src/paperless/consume" },
+      "healthCheck": { "path": "/api/", "interval": 30 },
+      "cli": {
+        "tools": ["psql", "curl", "jq"],
+        "envDoc": {
+          "PAPERLESS_TOKEN": "API token for Paperless-ngx (create via /api/token/)",
+          "PAPERLESS_API_URL": "Base URL for Paperless-ngx"
+        },
+        "aliases": {
+          "paperless-docs": "curl -s -H \"Authorization: Token $PAPERLESS_TOKEN\" \"$PAPERLESS_API_URL/api/documents/?ordering=-created\" | jq '.results[] | {id: .id, title: .title, correspondent: .correspondent}'",
+          "paperless-tags": "curl -s -H \"Authorization: Token $PAPERLESS_TOKEN\" \"$PAPERLESS_API_URL/api/tags/\" | jq '.results[] | {id: .id, name: .name}'"
+        },
+        "examples": [
+          "paperless-docs",
+          "psql -d paperless -c \"SELECT title, created, correspondent_id FROM documents_document ORDER BY created DESC LIMIT 10;\""
+        ],
+        "database": "paperless"
+      }
+    },
+
+    "vaultwarden": {
+      "name": "vaultwarden",
+      "displayName": "Vaultwarden",
+      "description": "Lightweight Bitwarden-compatible password manager",
+      "category": "security",
+      "image": "vaultwarden/server:latest",
+      "harness": {
+        "requires": []
+      },
+      "env": {
+        "DOMAIN": "http://vaultwarden.{{domain}}",
+        "ADMIN_TOKEN": "{{generate:hex:32}}",
+        "SIGNUPS_ALLOWED": "true"
+      },
+      "ports": { "internal": 80 },
+      "volumes": { "data": "/data" },
+      "healthCheck": { "path": "/alive", "interval": 30 },
+      "cli": {
+        "tools": ["curl", "jq"],
+        "envDoc": {
+          "VAULTWARDEN_URL": "Base URL for Vaultwarden",
+          "BW_SESSION": "Session key from bw unlock (use Bitwarden CLI)"
+        },
+        "aliases": {
+          "vw-status": "curl -s \"$VAULTWARDEN_URL/alive\" && echo ' OK'"
+        },
+        "examples": [
+          "curl -s \"$VAULTWARDEN_URL/alive\"",
+          "curl -s -H \"Authorization: Bearer $ADMIN_TOKEN\" \"$VAULTWARDEN_URL/admin/users/overview\" | jq"
+        ]
+      }
+    }
+  }
+}

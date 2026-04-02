@@ -6,6 +6,10 @@ const { StreamJsonParser } = require('./stream-parser');
 const { CliTimeoutError } = require('../lib/errors');
 const { logger } = require('../lib/logger');
 const { DEFAULTS } = require('../lib/constants');
+const { EnvManager } = require('../harness/env-manager');
+
+// Shared env manager instance for loading harness env files
+const envManager = new EnvManager();
 
 /**
  * Spawns a headless Gemini CLI invocation for a single message.
@@ -39,9 +43,12 @@ function spawnCli(opts) {
 
   log.info({ args: args.join(' ') }, 'Spawning CLI invocation');
 
+  // P3-06: Load harness env files so the agent has app credentials
+  const harnessEnv = envManager.loadAll();
+
   const child = spawn(cliPath, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, ...env },
+    env: { ...process.env, ...harnessEnv, ...env },
     cwd: opts.cwd || process.env.HOME || '/tmp',
     windowsHide: true,
   });

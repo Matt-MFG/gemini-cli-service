@@ -1,0 +1,166 @@
+/* ============================================================
+   File Explorer — Phase 3 (P3-51 through P3-57)
+   ============================================================ */
+
+/* Explorer panel (docks in sidebar or as standalone panel) */
+.file-explorer-panel {
+  display: none;
+  flex-direction: column;
+  background: var(--color-bg-secondary);
+  border-right: var(--border-ghost);
+  width: 280px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.file-explorer-panel.visible {
+  display: flex;
+}
+
+/* P3-53: Breadcrumbs */
+.explorer-breadcrumbs {
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  border-bottom: var(--border-ghost);
+  flex-shrink: 0;
+  min-height: 32px;
+}
+
+.breadcrumb-item {
+  font-size: 11px;
+  font-family: var(--font-sans);
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-hover);
+}
+
+.breadcrumb-item:hover {
+  color: var(--color-accent);
+  background: var(--color-accent-muted);
+}
+
+.breadcrumb-item:last-child {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.breadcrumb-sep {
+  color: var(--color-text-ghost);
+  font-size: 10px;
+}
+
+/* P3-51: Tree view */
+.explorer-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-1) 0;
+}
+
+.tree-item {
+  user-select: none;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-3);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  font-size: var(--font-size-sm);
+}
+
+.tree-row:hover {
+  background: var(--color-surface-1);
+}
+
+.tree-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+}
+
+.tree-name {
+  flex: 1;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-size {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-ghost);
+  flex-shrink: 0;
+}
+
+.tree-children {
+  padding-left: var(--space-4);
+}
+
+/* P3-52: Preview pane */
+.explorer-preview {
+  border-top: var(--border-ghost);
+  max-height: 40vh;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.preview-header {
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-surface-1);
+  border-bottom: var(--border-ghost);
+}
+
+.preview-name {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-size {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.preview-code {
+  margin: 0;
+  padding: var(--space-3);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  background: var(--color-surface-recessed);
+  overflow: auto;
+  max-height: 300px;
+  white-space: pre;
+  color: var(--color-text-secondary);
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 250px;
+  display: block;
+  margin: var(--space-2) auto;
+  border-radius: var(--radius-sm);
+}
+
+.preview-actions {
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  gap: var(--space-1);
+  border-top: var(--border-ghost);
+}

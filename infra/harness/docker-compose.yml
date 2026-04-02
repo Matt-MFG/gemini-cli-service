@@ -1,0 +1,92 @@
+# Gemini CLI as a Service — Infrastructure Harness
+# Shared services that all harness apps plug into.
+# Managed by InfraManager via `docker compose up/down`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: harness-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: ${HARNESS_PG_PASSWORD:-harness-secret}
+      POSTGRES_DB: harness
+    volumes:
+      - harness-pg-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - harness-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: harness-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${HARNESS_REDIS_PASSWORD:-harness-redis-secret}
+    volumes:
+      - harness-redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - harness-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${HARNESS_REDIS_PASSWORD:-harness-redis-secret}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: harness-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${HARNESS_MINIO_USER:-harness-minio}
+      MINIO_ROOT_PASSWORD: ${HARNESS_MINIO_PASSWORD:-harness-minio-secret}
+    volumes:
+      - harness-minio-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - harness-net
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  authelia:
+    image: authelia/authelia:latest
+    container_name: harness-authelia
+    restart: unless-stopped
+    volumes:
+      - ./authelia:/config
+      - harness-authelia-data:/data
+    ports:
+      - "9091:9091"
+    networks:
+      - harness-net
+    environment:
+      AUTHELIA_STORAGE_ENCRYPTION_KEY: ${HARNESS_AUTHELIA_ENCRYPTION_KEY:-a-very-long-encryption-key-for-authelia-storage}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9091/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  harness-pg-data:
+  harness-redis-data:
+  harness-minio-data:
+  harness-authelia-data:
+
+networks:
+  harness-net:
+    name: harness-net
+    driver: bridge

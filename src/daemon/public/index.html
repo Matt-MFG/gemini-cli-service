@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gemini CLI as a Service</title>
+
+<!-- Design System -->
+<link rel="stylesheet" href="/css/design-system.css">
+<link rel="stylesheet" href="/css/components.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/file-explorer.css">
+
+<!-- Syntax Highlighting -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/monokai-sublime.min.css">
+
+<!-- CDN Dependencies -->
+<script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+</head>
+<body>
+
+<!-- TOOLBAR -->
+<header>
+  <button class="btn-icon" id="sidebar-toggle" title="Toggle sidebar">&#9776;</button>
+  <h1>Gemini CLI</h1>
+  <div class="toolbar-sep"></div>
+  <span id="token-count"></span>
+  <span id="health-status">Connecting...</span>
+</header>
+
+<!-- CONVERSATION BAR -->
+<div class="conv-bar">
+  <span style="color:var(--color-text-muted);">Conversation:</span>
+  <select id="conv-select"><option value="">New conversation</option></select>
+  <button id="new-conv">+ New</button>
+  <div style="flex:1"></div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main">
+
+  <!-- LEFT SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab active" data-pane="apps">Apps</button>
+      <button class="sidebar-tab" data-pane="harness">Harness</button>
+      <button class="sidebar-tab" data-pane="files">Files</button>
+      <button class="sidebar-tab" data-pane="mcp">MCP</button>
+    </div>
+
+    <!-- Apps pane -->
+    <div class="sidebar-pane active" id="pane-apps">
+      <div class="app-filter-bar">
+        <button class="app-filter-btn active" data-filter="all">All</button>
+        <button class="app-filter-btn" data-filter="running">Running</button>
+        <button class="app-filter-btn" data-filter="stopped">Stopped</button>
+      </div>
+      <div id="app-list" style="flex:1;overflow-y:auto;"></div>
+    </div>
+
+    <!-- Harness pane — infrastructure + registry -->
+    <div class="sidebar-pane" id="pane-harness">
+      <div class="sidebar-section">
+        <div class="sidebar-section-header">Infrastructure</div>
+        <div id="harness-status" class="harness-status-grid"></div>
+        <div style="padding:var(--space-2) var(--space-3);display:flex;gap:var(--space-1);">
+          <button class="btn-sm" id="harness-start-btn">Start</button>
+          <button class="btn-sm" id="harness-stop-btn">Stop</button>
+        </div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-header">Available Apps</div>
+        <div id="registry-list" style="flex:1;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- Skills pane -->
+    <div class="sidebar-pane" id="pane-skills">
+      <div id="skills-list" style="flex:1;overflow-y:auto;"></div>
+    </div>
+
+    <!-- MCP pane -->
+    <div class="sidebar-pane" id="pane-mcp">
+      <div id="mcp-list" style="flex:1;overflow-y:auto;"></div>
+      <button class="btn-add" id="add-mcp-btn">+ Add MCP Server</button>
+    </div>
+  </div>
+
+  <!-- FILE EXPLORER PANEL (P3-51) -->
+  <div class="file-explorer-panel" id="file-explorer-panel">
+    <div class="sidebar-section-header" style="display:flex;align-items:center;">
+      <span style="flex:1;">Files</span>
+      <button class="btn-icon" id="explorer-close" title="Close explorer">&times;</button>
+    </div>
+    <div class="explorer-breadcrumbs" id="explorer-breadcrumbs"></div>
+    <div class="explorer-tree" id="explorer-tree"></div>
+    <div class="explorer-preview" id="explorer-preview"></div>
+  </div>
+
+  <!-- CENTER CHAT -->
+  <div class="chat-panel">
+    <!-- Empty state (P3-33) -->
+    <div id="empty-state" class="empty-chat-state">
+      <div class="empty-chat-icon">&#10024;</div>
+      <h2>What would you like to build?</h2>
+      <p>I can create apps, manage infrastructure, write code, and explore your cloud.</p>
+      <div class="suggested-prompts">
+        <button class="prompt-chip" data-prompt="Install Outline — I want a wiki">Install a wiki</button>
+        <button class="prompt-chip" data-prompt="What apps are available in the harness?">Browse apps</button>
+        <button class="prompt-chip" data-prompt="Build me a simple dashboard with charts">Build a dashboard</button>
+        <button class="prompt-chip" data-prompt="Show me the infrastructure status">Check infrastructure</button>
+      </div>
+    </div>
+    <div id="messages" style="display:none;"></div>
+    <div id="input-area">
+      <textarea id="msg-input" rows="1" placeholder="Send a message..." autofocus></textarea>
+      <button id="send-btn">Send</button>
+    </div>
+  </div>
+
+  <!-- CHAT/PANEL RESIZE HANDLE -->
+  <div class="main-resize-handle" id="main-resize-handle"></div>
+
+  <!-- RIGHT PANELS CONTAINER -->
+  <div class="right-panels" id="right-panels"></div>
+</div>
+
+<!-- MCP MODAL -->
+<div class="modal-backdrop hidden" id="mcp-modal">
+  <div class="modal">
+    <h2>Add MCP Server</h2>
+    <label>Name</label>
+    <input type="text" id="mcp-name" placeholder="my-server">
+    <label>Command</label>
+    <input type="text" id="mcp-cmd" placeholder="node server.js">
+    <label>Args (comma-separated)</label>
+    <input type="text" id="mcp-args" placeholder="--port,3200">
+    <label>Env vars (KEY=value, one per line)</label>
+    <textarea id="mcp-env" placeholder="API_KEY=abc123"></textarea>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="mcp-cancel">Cancel</button>
+      <button class="btn-primary" id="mcp-save">Add Server</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTEXT MENU -->
+<div class="context-menu" id="ctx-menu" style="display:none;"></div>
+
+<!-- Application JavaScript -->
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

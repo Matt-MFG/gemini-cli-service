@@ -91,6 +91,45 @@ function detectStructuredPanel(event) {
     }
   }
 
+  // Harness status results -> harness_status template
+  if (event.type === 'tool_result' && (toolKey === 'harness_status' || toolKey.includes('harness_status'))) {
+    try {
+      const data = typeof event.output === 'string' ? JSON.parse(event.output) : event.output;
+      if (data && data.services) {
+        return {
+          type: 'a2ui',
+          component: 'harness_status',
+          title: 'Infrastructure Status',
+          ...render('table', {
+            title: 'Infrastructure Services',
+            columns: ['Service', 'State', 'Health'],
+            rows: Object.entries(data.services).map(([name, svc]) => [
+              name,
+              svc.state || 'unknown',
+              svc.health || 'unknown',
+            ]),
+          }),
+        };
+      }
+    } catch { /* fall through */ }
+  }
+
+  // Harness install progress -> app_install_progress
+  if (event.type === 'tool_result' && (toolKey === 'harness_install' || toolKey.includes('harness_install'))) {
+    try {
+      const data = typeof event.output === 'string' ? JSON.parse(event.output) : event.output;
+      if (data && data.name) {
+        return {
+          type: 'a2ui',
+          component: 'app_created',
+          name: data.name,
+          url: data.url || '',
+          status: data.status || 'installed',
+        };
+      }
+    } catch { /* fall through */ }
+  }
+
   // Test output detection from tool results
   if (event.type === 'tool_result') {
     const output = event.output || event.stdout || '';

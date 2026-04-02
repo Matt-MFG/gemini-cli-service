@@ -1,0 +1,439 @@
+/* ============================================================
+   Component Styles — Architectural Ethereal
+   ============================================================ */
+
+/* ====== BUTTONS ====== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: var(--border-none);
+  cursor: pointer;
+  transition: all var(--transition-hover);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Primary — gradient CTA */
+.btn-primary {
+  background: var(--gradient-primary);
+  color: #fff;
+  border: none;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-hover);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--gradient-primary-hover);
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+/* Secondary */
+.btn-secondary {
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  border: var(--border-ghost);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-hover);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-surface-3);
+  color: var(--color-text-primary);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Ghost */
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-hover);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
+}
+
+/* Small button */
+.btn-sm {
+  font-size: 11px;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: var(--border-ghost);
+  background: var(--color-surface-1);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-hover);
+}
+
+.btn-sm:hover {
+  background: var(--color-surface-3);
+  color: var(--color-text-primary);
+}
+
+.btn-sm.danger {
+  border-color: rgba(248, 113, 113, 0.2);
+  color: var(--color-error);
+}
+
+.btn-sm.danger:hover {
+  background: var(--color-error-muted);
+}
+
+/* Icon button */
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-hover);
+  font-size: var(--font-size-base);
+}
+
+.btn-icon:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-2);
+}
+
+/* Add button (dashed) */
+.btn-add {
+  display: block;
+  width: calc(100% - var(--space-6));
+  margin: var(--space-2) var(--space-3);
+  padding: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-sans);
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  cursor: pointer;
+  text-align: center;
+  transition: all var(--transition-hover);
+}
+
+.btn-add:hover {
+  background: var(--color-accent-muted);
+  border-color: rgba(124, 138, 255, 0.3);
+}
+
+/* Approve / Reject */
+.btn-approve {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-sans);
+  background: var(--color-success-muted);
+  color: var(--color-success);
+  border: var(--border-ghost);
+  transition: all var(--transition-hover);
+}
+
+.btn-approve:hover {
+  background: rgba(74, 222, 128, 0.25);
+}
+
+.btn-reject {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-sans);
+  background: var(--color-error-muted);
+  color: var(--color-error);
+  border: var(--border-ghost);
+  transition: all var(--transition-hover);
+}
+
+.btn-reject:hover {
+  background: rgba(248, 113, 113, 0.25);
+}
+
+/* ====== INPUTS ====== */
+.input {
+  width: 100%;
+  background: var(--color-surface-recessed);
+  color: var(--color-text-primary);
+  border: var(--border-ghost);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color var(--transition-hover);
+}
+
+.input:focus {
+  border-color: rgba(124, 138, 255, 0.4);
+  box-shadow: 0 0 0 3px var(--color-accent-muted);
+}
+
+.input::placeholder {
+  color: var(--color-text-ghost);
+}
+
+textarea.input {
+  resize: vertical;
+  min-height: 70px;
+}
+
+/* ====== TOGGLE SWITCH ====== */
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--color-surface-3);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background var(--transition-hover);
+}
+
+.toggle-switch input:checked + .toggle-track {
+  background: var(--color-accent);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: var(--radius-full);
+  transition: transform var(--transition-hover);
+}
+
+.toggle-switch input:checked ~ .toggle-thumb {
+  transform: translateX(16px);
+}
+
+/* ====== CARDS ====== */
+.card {
+  background: var(--color-surface-1);
+  border: var(--border-ghost);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: all var(--transition-hover);
+}
+
+.card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.card-header {
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.card-body {
+  padding: var(--space-3);
+}
+
+/* ====== STATUS DOT ====== */
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-dot.running { background: var(--color-success); }
+.status-dot.stopped { background: var(--color-text-muted); }
+.status-dot.error { background: var(--color-error); }
+
+/* ====== BADGE ====== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-3);
+  color: var(--color-text-secondary);
+}
+
+.badge.accent {
+  background: var(--color-accent-muted);
+  color: var(--color-accent);
+}
+
+.badge.success {
+  background: var(--color-success-muted);
+  color: var(--color-success);
+}
+
+.badge.error {
+  background: var(--color-error-muted);
+  color: var(--color-error);
+}
+
+/* ====== MODAL ====== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 200ms ease-out;
+}
+
+.modal-backdrop.hidden {
+  display: none;
+}
+
+.modal {
+  background: var(--color-surface-1);
+  border: var(--border-ghost);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  min-width: 400px;
+  max-width: 560px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+  animation: scaleIn 300ms ease-out;
+}
+
+.modal h2 {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-4);
+  color: var(--color-text-primary);
+}
+
+.modal label {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.modal input,
+.modal textarea {
+  width: 100%;
+  background: var(--color-surface-recessed);
+  color: var(--color-text-primary);
+  border: var(--border-ghost);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color var(--transition-hover);
+}
+
+.modal input:focus,
+.modal textarea:focus {
+  border-color: rgba(124, 138, 255, 0.4);
+}
+
+.modal textarea {
+  resize: vertical;
+  min-height: 70px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-top: var(--space-5);
+}
+
+/* ====== CONTEXT MENU ====== */
+.context-menu {
+  position: fixed;
+  background: var(--color-surface-1);
+  border: var(--border-ghost);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) 0;
+  z-index: var(--z-context-menu);
+  font-size: var(--font-size-sm);
+  min-width: 160px;
+  box-shadow: var(--shadow-lg);
+  animation: scaleIn 150ms ease-out;
+}
+
+.context-menu-item {
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.context-menu-item:hover {
+  background: var(--color-accent-muted);
+  color: var(--color-text-primary);
+}
+
+.context-menu-sep {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: var(--space-1) 0;
+}
+
+/* ====== EMPTY STATE ====== */
+.empty-state {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-ghost);
+  font-size: var(--font-size-sm);
+}

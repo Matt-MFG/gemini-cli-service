@@ -1,0 +1,13 @@
+# Authelia Users Database — Gemini CLI as a Service Harness
+# Single-user system. Password is set on first harness init.
+
+users:
+  admin:
+    disabled: false
+    displayname: "Admin"
+    # Default password: "changeme" (argon2id hash)
+    # MUST be changed on first use via HARNESS_ADMIN_PASSWORD env var
+    password: "$argon2id$v=19$m=65536,t=3,p=4$cXVpdGVhbG9uZ3NhbHQ$RLnPJxDGMOXMAIgJUBRMlBPr+KsQPEzHkAIXR3H/2es"
+    email: admin@localhost
+    groups:
+      - admins
