@@ -14,7 +14,7 @@ const { logger } = require('../lib/logger');
  * GET  /apps/:name/logs     — get container logs
  * DELETE /apps/:name        — remove container
  */
-async function appRoutes(fastify, { registry, containerManager, networkManager }) {
+async function appRoutes(fastify, { registry, containerManager, networkManager, caddyRouter }) {
   // Create and start an app container
   fastify.post('/apps/create', {
     schema: {
@@ -59,21 +59,31 @@ async function appRoutes(fastify, { registry, containerManager, networkManager }
         networkName,
       });
 
+      // Register Caddy route for name-based URL
+      let appUrl = result.url;
+      if (caddyRouter) {
+        try {
+          appUrl = await caddyRouter.register(name, result.hostPort);
+        } catch (err) {
+          log.warn({ err: err.message }, 'Caddy route registration failed; using direct port URL');
+        }
+      }
+
       // Register in app registry
       const app = registry.createApp({
         userId: user_id,
         name,
         image: image || 'node:22-alpine',
         internalPort: port || 3000,
-        url: result.url,
+        url: appUrl,
         containerId: result.containerId,
         startCommand: start_command,
         env,
       });
       registry.updateAppStatus(app.id, 'running', result.containerId);
 
-      log.info({ url: result.url, containerId: result.containerId }, 'App created');
-      return { url: result.url, container_id: result.containerId, status: 'running' };
+      log.info({ url: appUrl, containerId: result.containerId }, 'App created');
+      return { url: appUrl, container_id: result.containerId, status: 'running' };
 
     } catch (err) {
       log.error({ err }, 'Failed to create app');
@@ -214,6 +224,62 @@ async function appRoutes(fastify, { registry, containerManager, networkManager }
       }
       registry.deleteApp(app.id);
       return { deleted: true, name: req.params.name };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // Phase 2: App group management (P2-W6, F2-24)
+
+  /**
+   * POST /apps/:name/group — Assign app to a group
+   */
+  fastify.post('/apps/:name/group', {
+    schema: {
+      params: { type: 'object', required: ['name'], properties: { name: { type: 'string' } } },
+      body: {
+        type: 'object',
+        required: ['user_id', 'group'],
+        properties: {
+          user_id: { type: 'string' },
+          group: { type: 'string' },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const app = registry.getAppByName(req.body.user_id, req.params.name);
+    if (!app) return reply.code(404).send({ error: 'App not found' });
+
+    try {
+      registry.setAppGroup(app.id, req.body.group);
+      return { name: req.params.name, group: req.body.group };
+    } catch (err) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  /**
+   * POST /apps/:name/link — Link app to a conversation (F2-28)
+   */
+  fastify.post('/apps/:name/link', {
+    schema: {
+      params: { type: 'object', required: ['name'], properties: { name: { type: 'string' } } },
+      body: {
+        type: 'object',
+        required: ['user_id', 'conversation_id'],
+        properties: {
+          user_id: { type: 'string' },
+          conversation_id: { type: 'string' },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const app = registry.getAppByName(req.body.user_id, req.params.name);
+    if (!app) return reply.code(404).send({ error: 'App not found' });
+
+    try {
+      registry.linkAppConversation(app.id, req.body.conversation_id);
+      return { name: req.params.name, conversation_id: req.body.conversation_id };
     } catch (err) {
       return reply.code(500).send({ error: err.message });
     }

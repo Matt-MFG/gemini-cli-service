@@ -55,7 +55,7 @@ const templates = {
   app_inventory(data) {
     const { apps } = data;
     return {
-      component: 'table',
+      component: 'app_inventory',
       title: 'Running Applications',
       summary: `${apps.filter((a) => a.status === 'running').length} running, ${apps.filter((a) => a.status === 'stopped').length} stopped`,
       columns: ['Name', 'Status', 'URL', 'Port'],

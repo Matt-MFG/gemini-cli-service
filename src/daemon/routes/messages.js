@@ -3,6 +3,8 @@
 const { COMMAND_CATEGORIES, DEFAULTS } = require('../lib/constants');
 const { EVENT_TYPES } = require('../lib/constants');
 const { logger } = require('../lib/logger');
+const { checkWriteRouting, createRoutingWarning } = require('../router/write-interceptor');
+const { detectStructuredPanel } = require('../a2ui/detector');
 
 /**
  * Message handling route — the core of the system.
@@ -16,7 +18,7 @@ const { logger } = require('../lib/logger');
  * 4. Stream parsed events back as SSE
  * 5. Record token usage from result event
  */
-async function messageRoutes(fastify, { config, classifier, sessionManager, queue, spawner, registry }) {
+async function messageRoutes(fastify, { config, classifier, sessionManager, queue, spawner, registry, budgetManager }) {
   fastify.post('/send', {
     schema: {
       body: {
@@ -55,6 +57,17 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
     // 2. Get CLI text to forward
     const cliText = classification.cliText || text;
 
+    // F-34: Check budget before spawning CLI
+    if (budgetManager) {
+      const budget = budgetManager.check(user_id);
+      if (!budget.allowed) {
+        return { type: 'budget_exceeded', message: budget.reason };
+      }
+      if (budget.warning) {
+        log.warn({ warning: budget.warning }, 'Budget warning');
+      }
+    }
+
     // 3. Set up SSE streaming
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -88,11 +101,21 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
 
         // Stream events as SSE
         invocation.on('event', (event) => {
+          // P2-W3: Detect structured panels in tool output
+          const panel = detectStructuredPanel(event);
+          if (panel) {
+            sendSSE(reply.raw, 'event', panel);
+          }
+
           sendSSE(reply.raw, 'event', event);
 
           // Capture CLI session ID from init event for future --resume
           if (event.type === EVENT_TYPES.INIT && event.session_id) {
-            sessionManager.setCliSessionId(user_id, conversation_id, event.session_id);
+            try {
+              sessionManager.setCliSessionId(user_id, conversation_id, event.session_id);
+            } catch (err) {
+              log.warn({ err: err.message, conversation_id }, 'Failed to store CLI session ID');
+            }
           }
 
           // Record token usage from result events (real CLI nests under stats)
@@ -118,6 +141,13 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
               args: event.args,
               result: null,
             });
+
+            // P1-FIX-1: Check for write_file routing leaks
+            const activeApps = registry.listApps(user_id).map((a) => a.name);
+            const routeCheck = checkWriteRouting(event, activeApps);
+            if (routeCheck.intercepted) {
+              sendSSE(reply.raw, 'event', createRoutingWarning(routeCheck));
+            }
           }
         });
 
@@ -151,7 +181,7 @@ function ensureSession(sessionManager, userId, conversationId, text) {
   try {
     return sessionManager.getSessionId(userId, conversationId);
   } catch {
-    const { sessionPath } = sessionManager.create(userId);
+    const { sessionPath } = sessionManager.create(userId, conversationId);
     return sessionPath;
   }
 }

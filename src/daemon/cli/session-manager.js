@@ -25,15 +25,15 @@ class SessionManager {
    * Creates a new conversation session for a user.
    * Returns the conversation ID and session path.
    */
-  create(userId, name) {
-    const conversationId = crypto.randomUUID();
+  create(userId, nameOrId) {
+    const conversationId = nameOrId || crypto.randomUUID();
     const sessionPath = this._sessionPath(userId, conversationId);
     fs.mkdirSync(sessionPath, { recursive: true });
 
     const metadata = {
       conversationId,
       userId,
-      name: name || null,
+      name: nameOrId || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       turnCount: 0,

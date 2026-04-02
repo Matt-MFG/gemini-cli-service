@@ -84,9 +84,11 @@ class ContainerManager {
       },
     };
 
-    if (startCommand) {
+    if (startCommand && startCommand !== 'default') {
       createOpts.Cmd = ['sh', '-c', startCommand];
     }
+    // If no startCommand and image has a known default (nginx, httpd),
+    // don't override — let the image's CMD run
 
     // Pull image if not available
     await this._ensureImage(image);
@@ -258,6 +260,31 @@ class ContainerManager {
 
   _releasePort(port) {
     this._usedPorts.delete(port);
+  }
+
+  /**
+   * Scans existing Docker containers to populate the used ports set.
+   * Must be called on startup to avoid port conflicts after daemon restart.
+   */
+  async syncPorts() {
+    try {
+      const containers = await this._docker.listContainers({ all: true });
+      for (const c of containers) {
+        if (c.Ports) {
+          for (const p of c.Ports) {
+            if (p.PublicPort) {
+              this._usedPorts.add(p.PublicPort);
+              if (p.PublicPort >= this._nextPort) {
+                this._nextPort = p.PublicPort + 1;
+              }
+            }
+          }
+        }
+      }
+      logger.info({ usedPorts: [...this._usedPorts], nextPort: this._nextPort }, 'Port allocation synced with Docker');
+    } catch (err) {
+      logger.warn({ err: err.message }, 'Failed to sync ports with Docker');
+    }
   }
 
   /**
