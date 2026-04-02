@@ -18,7 +18,7 @@ const { detectStructuredPanel } = require('../a2ui/detector');
  * 4. Stream parsed events back as SSE
  * 5. Record token usage from result event
  */
-async function messageRoutes(fastify, { config, classifier, sessionManager, queue, spawner, registry }) {
+async function messageRoutes(fastify, { config, classifier, sessionManager, queue, spawner, registry, budgetManager }) {
   fastify.post('/send', {
     schema: {
       body: {
@@ -56,6 +56,17 @@ async function messageRoutes(fastify, { config, classifier, sessionManager, queu
 
     // 2. Get CLI text to forward
     const cliText = classification.cliText || text;
+
+    // F-34: Check budget before spawning CLI
+    if (budgetManager) {
+      const budget = budgetManager.check(user_id);
+      if (!budget.allowed) {
+        return { type: 'budget_exceeded', message: budget.reason };
+      }
+      if (budget.warning) {
+        log.warn({ warning: budget.warning }, 'Budget warning');
+      }
+    }
 
     // 3. Set up SSE streaming
     reply.raw.writeHead(200, {
