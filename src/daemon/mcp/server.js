@@ -192,18 +192,28 @@ function createToolHandlers(services) {
     async apps_create({ name, image, port, start_command, env }, context) {
       const userId = context.userId;
 
-      // Check if app already exists — return it if running, clean up if broken
+      // Check if app already exists
       const existing = registry.getAppByName(userId, name);
       if (existing) {
-        if (existing.status === 'running') {
+        // Verify Docker state matches registry
+        let dockerRunning = false;
+        if (existing.container_id) {
+          try {
+            const info = await containerManager._docker.getContainer(existing.container_id).inspect();
+            dockerRunning = info.State.Running && !info.State.Restarting;
+          } catch { /* container gone */ }
+        }
+
+        if (dockerRunning) {
           return {
             url: existing.url,
             container_id: existing.container_id,
             status: 'already_running',
-            note: `App "${name}" is already running. Use @apps.exec to modify it.`,
+            note: `App "${name}" is already running. Use apps_exec to modify it.`,
           };
         }
-        // App exists but not running — remove stale container and registry entry
+
+        // App exists but not actually running — clean up and recreate
         try {
           if (existing.container_id) {
             await containerManager.remove(existing.container_id, true);

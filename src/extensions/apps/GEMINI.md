@@ -71,11 +71,18 @@ apps_compose(name="myproject", services={
 
 ## Workflow Examples
 
-### Building a React app
-1. `apps_create(name="dashboard", port=3000, start_command="npx vite --host")`
-2. `apps_exec(name="dashboard", command="npm create vite@latest . -- --template react-ts && npm install")`
-3. Share the URL with the user
-4. Use `apps_exec` for all subsequent code changes
+### Building a React/Next.js app
+**IMPORTANT: Always use `start_command="sleep infinity"` when creating the app.** This keeps the container alive while you write code. Start the dev server AFTER writing files and installing dependencies.
+
+1. `apps_create(name="dashboard", port=3000, start_command="sleep infinity")`
+2. `apps_exec(name="dashboard", command="cat > package.json << 'EOF'\n{...}\nEOF")`
+3. `apps_exec(name="dashboard", command="npm install")`
+4. Write all source files with `apps_exec`
+5. `apps_exec(name="dashboard", command="nohup npx next dev --hostname 0.0.0.0 > /tmp/dev.log 2>&1 &")` — start the dev server in background
+6. Share the URL with the user
+7. Use `apps_exec` for all subsequent code changes — the dev server will hot-reload
+
+Do NOT set `start_command` to `npm run dev` or `npm start` — the container will restart in a loop because there's no code yet.
 
 ### App with database
 1. `apps_compose(name="myapp", services={...})`
