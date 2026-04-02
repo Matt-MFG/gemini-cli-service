@@ -93,7 +93,10 @@ class CaddyRouter {
     try {
       const resp = await fetch(`${this._adminUrl}/load`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'http://localhost:2019',
+        },
         body: JSON.stringify(config),
       });
       if (!resp.ok) {
