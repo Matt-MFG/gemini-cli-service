@@ -17,9 +17,9 @@ const HTML = `<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gemini CLI as a Service</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/nicedoc/highlight.js/styles/monokai-sublime.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/monokai-sublime.min.css">
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"><\/script>
-<script src="https://cdn.jsdelivr.net/gh/nicedoc/highlight.js/highlight.min.js"><\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"><\/script>
 <style>
 /* ====== RESET & BASE ====== */
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -97,7 +97,7 @@ header h1{font-size:14px;font-weight:700;color:#7c8aff;white-space:nowrap;}
 .empty-state{padding:24px;text-align:center;color:#555;font-size:13px;}
 
 /* ====== CHAT PANEL ====== */
-.chat-panel{display:flex;flex-direction:column;min-width:0;overflow:hidden;}
+.chat-panel{display:flex;flex-direction:column;min-width:300px;overflow:hidden;}
 #messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px;min-height:0;}
 .msg-wrap{display:flex;flex-direction:column;}
 .msg-wrap.user{align-items:flex-end;}
@@ -195,7 +195,7 @@ header h1{font-size:14px;font-weight:700;color:#7c8aff;white-space:nowrap;}
 #send-btn:disabled{background:#333;cursor:not-allowed;}
 
 /* ====== RIGHT PANEL ====== */
-.right-panels{display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+.right-panels{display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;max-width:60vw;}
 .right-panel{display:flex;flex-direction:column;background:#111118;border-left:1px solid #2a2a3a;min-width:0;}
 .right-panel.closed{display:none;}
 .panel-header{padding:6px 10px;background:#1a1a2e;border-bottom:1px solid #2a2a3a;display:flex;align-items:center;gap:6px;font-size:12px;flex-shrink:0;}
@@ -205,6 +205,9 @@ header h1{font-size:14px;font-weight:700;color:#7c8aff;white-space:nowrap;}
 .panel-iframe{flex:1;border:none;background:#fff;}
 .resize-handle{width:5px;background:#2a2a3a;cursor:col-resize;flex-shrink:0;}
 .resize-handle:hover,.resize-handle.dragging{background:#7c8aff44;}
+.main-resize-handle{width:5px;background:#2a2a3a;cursor:col-resize;flex-shrink:0;display:none;}
+.main-resize-handle.visible{display:block;}
+.main-resize-handle:hover,.main-resize-handle.dragging{background:#7c8aff44;}
 
 /* ====== APPROVAL GATE ====== */
 .approval-actions{margin-top:8px;display:flex;gap:8px;}
@@ -306,6 +309,9 @@ header h1{font-size:14px;font-weight:700;color:#7c8aff;white-space:nowrap;}
       <button id="send-btn">Send</button>
     </div>
   </div>
+
+  <!-- CHAT/PANEL RESIZE HANDLE -->
+  <div class="main-resize-handle" id="main-resize-handle"></div>
 
   <!-- RIGHT PANELS CONTAINER -->
   <div class="right-panels" id="right-panels"></div>
@@ -1057,6 +1063,19 @@ function handleSSEEvent(ev, asst, setContent) {
   } else if (ev.type === 'system_warning') {
     addSystemMsg(ev.message || 'System warning');
 
+  } else if (ev.type === 'a2ui') {
+    // Backend sends a2ui events directly (not nested under ev.data)
+    if (ev.component === 'table' || ev.template === 'table') {
+      renderA2uiPanel('table', ev, ev.title || 'Table');
+    } else if (ev.component === 'app_inventory') {
+      renderA2uiPanel('app_inventory', ev, ev.title || 'Running Applications');
+    } else if (ev.component === 'app_created') {
+      renderA2uiPanel('app_created', ev, ev.title || 'App Created');
+    } else {
+      var tmpl = ev.component || ev.template || 'table';
+      renderA2uiPanel(tmpl, ev, ev.title || ev.label || tmpl);
+    }
+
   } else if (ev.type === 'event') {
     // A2UI structured panels
     var inner = ev.data || {};
@@ -1106,18 +1125,43 @@ function checkTestPatternInResult(output) {
 }
 
 function checkForAppCreation(ev) {
-  // Detect app creation from tool results
+  // Detect app creation from tool results or tool_use parameters
   var toolName = ev.tool_name || '';
-  var output = String(ev.output || '');
 
   if (toolName.includes('app') || toolName.includes('create')) {
-    // Look for URL patterns in output
-    var urlMatch = output.match(/https?:\\/\\/[\\w.:\\-/]+/);
-    if (urlMatch) {
-      var url = urlMatch[0];
-      var nameMatch = output.match(/name['":\\s]+([\\w-]+)/i);
-      var name = nameMatch ? nameMatch[1] : url;
-      openPanel(url, name, url);
+    var url = null;
+    var name = null;
+
+    // Check parameters (tool_use events) for app name
+    if (ev.parameters && typeof ev.parameters === 'object') {
+      name = ev.parameters.name || ev.parameters.app_name || null;
+    }
+
+    // Handle ev.output being an object (parsed JSON) or a string
+    if (ev.output && typeof ev.output === 'object') {
+      url = ev.output.url || null;
+      name = name || ev.output.name || ev.output.app_name || null;
+    } else if (ev.output) {
+      // Try to parse as JSON first
+      var parsed = null;
+      try { parsed = JSON.parse(ev.output); } catch(e) {}
+      if (parsed && typeof parsed === 'object') {
+        url = parsed.url || null;
+        name = name || parsed.name || parsed.app_name || null;
+      } else {
+        // Fall back to regex on string
+        var outputStr = String(ev.output);
+        var urlMatch = outputStr.match(/https?:\\/\\/[\\w.:\\-/]+/);
+        if (urlMatch) {
+          url = urlMatch[0];
+          var nameMatch = outputStr.match(/name['":\\s]+([\\w-]+)/i);
+          name = name || (nameMatch ? nameMatch[1] : null);
+        }
+      }
+    }
+
+    if (url) {
+      openPanel(url, name || url, url);
     }
   }
 
@@ -1160,9 +1204,15 @@ $('send-btn').addEventListener('click', function() {
 function renderPanels() {
   var container = $('right-panels');
   container.innerHTML = '';
-  if (!state.panels.length) return;
 
-  var totalWidth = state.rightPanelWidth;
+  var mainHandle = $('main-resize-handle');
+  if (!state.panels.length) {
+    if (mainHandle) mainHandle.classList.remove('visible');
+    return;
+  }
+  if (mainHandle) mainHandle.classList.add('visible');
+
+  var totalWidth = Math.min(state.rightPanelWidth, Math.floor(window.innerWidth * 0.3));
   container.style.width = (totalWidth * state.panels.length) + 'px';
 
   state.panels.forEach(function(p, idx) {
@@ -1233,6 +1283,8 @@ function closePanel(id) {
   renderPanels();
   if (!state.panels.length) {
     $('right-panels').style.width = '';
+    var mainHandle = $('main-resize-handle');
+    if (mainHandle) mainHandle.classList.remove('visible');
   }
   saveLocalState();
 }
@@ -1259,6 +1311,34 @@ function setupResizeHandle(handle, container, idx) {
     handle.classList.remove('dragging');
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
+  }
+}
+
+function setupMainResizeHandle() {
+  var handle = $('main-resize-handle');
+  if (!handle) return;
+  var startX, startW;
+  handle.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    startX = e.clientX;
+    startW = state.rightPanelWidth;
+    handle.classList.add('dragging');
+    document.addEventListener('mousemove', onMainMove);
+    document.addEventListener('mouseup', onMainUp);
+  });
+  function onMainMove(e) {
+    var dx = startX - e.clientX; // dragging left expands right panels
+    var maxW = Math.floor(window.innerWidth * 0.6);
+    state.rightPanelWidth = Math.max(240, Math.min(maxW, startW + dx));
+    var container = $('right-panels');
+    var panels = container.querySelectorAll('.right-panel');
+    panels.forEach(function(p) { p.style.width = state.rightPanelWidth + 'px'; });
+    container.style.width = (state.rightPanelWidth * state.panels.length + (state.panels.length - 1) * 5) + 'px';
+  }
+  function onMainUp() {
+    handle.classList.remove('dragging');
+    document.removeEventListener('mousemove', onMainMove);
+    document.removeEventListener('mouseup', onMainUp);
   }
 }
 
@@ -1457,7 +1537,7 @@ async function appAction(name, action) {
     await authFetch('/apps/' + encodeURIComponent(name) + '/' + action, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: '{}',
+      body: JSON.stringify({user_id: state.userId}),
     });
     setTimeout(loadApps, 1000);
   } catch(e) { addSystemMsg('Error: ' + e.message); }
@@ -1754,6 +1834,7 @@ if (!ensureAuth()) {
   loadApps();
   setInterval(loadApps, 15000);
   subscribeApprovals();
+  setupMainResizeHandle();
   loadLocalState();
   addSystemMsg('Welcome to Gemini CLI as a Service. Type a message to start.');
 }
