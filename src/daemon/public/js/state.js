@@ -64,20 +64,29 @@ export function saveLocalState() {
 }
 
 export async function ensureAuth() {
-  if (state.apiKey) return true;
-  // Check if server requires auth by hitting /health (always unauthenticated)
+  // If we have a stored key, verify it still works
+  if (state.apiKey && state.apiKey !== 'none') {
+    try {
+      const test = await fetch('/conversations/list?user_id=web-user', {
+        headers: { 'X-API-Key': state.apiKey },
+      });
+      if (test.ok || test.status !== 401) return true;
+    } catch { /* fall through to re-prompt */ }
+    // Stored key is invalid — clear and re-prompt
+    state.apiKey = '';
+    sessionStorage.removeItem('apiKey');
+  }
+
+  // Check if server requires auth at all
   try {
-    const r = await fetch('/health');
-    if (r.ok) {
-      // Server is up — try an authenticated endpoint without a key
-      const test = await fetch('/conversations/list?user_id=web-user');
-      if (test.ok || test.status !== 401) {
-        // Auth not required
-        state.apiKey = 'none';
-        return true;
-      }
+    const test = await fetch('/conversations/list?user_id=web-user');
+    if (test.ok || test.status !== 401) {
+      state.apiKey = 'no-auth';
+      return true;
     }
-  } catch { /* server not reachable, fall through to prompt */ }
+  } catch { /* server not reachable */ }
+
+  // Server requires auth — prompt user
   state.apiKey = prompt('Enter API key:');
   if (!state.apiKey) return false;
   sessionStorage.setItem('apiKey', state.apiKey);
