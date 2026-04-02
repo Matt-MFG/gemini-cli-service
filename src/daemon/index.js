@@ -16,6 +16,7 @@ const { BudgetManager } = require('./tokens/budget');
 const { AutoCompressor } = require('./tokens/compressor');
 const { ContainerManager } = require('./docker/container-manager');
 const { NetworkManager } = require('./docker/network-manager');
+const { CaddyRouter } = require('./docker/caddy-router');
 
 const healthRoutes = require('./routes/health');
 const conversationRoutes = require('./routes/conversations');
@@ -55,6 +56,15 @@ async function main() {
   const containerManager = new ContainerManager({ domainSuffix: config.domainSuffix });
   await containerManager.syncPorts(); // Avoid port conflicts after restart
   const networkManager = new NetworkManager();
+  const caddyRouter = new CaddyRouter({ domain: config.domainSuffix });
+
+  // Sync Caddy routes for already-running apps
+  try {
+    const existingApps = registry.listApps('web-user');
+    await caddyRouter.syncFromRegistry(existingApps);
+  } catch (err) {
+    logger.warn({ err: err.message }, 'Caddy route sync skipped');
+  }
 
   // 3. Build Fastify server
   const app = fastify({
@@ -83,7 +93,7 @@ async function main() {
   const deps = {
     config, startTime, sessionManager, classifier, queue, registry,
     spawner: spawnCli, approvalGate, tokenTracker, budgetManager, compressor,
-    containerManager, networkManager,
+    containerManager, networkManager, caddyRouter,
   };
 
   await app.register(healthRoutes, deps);

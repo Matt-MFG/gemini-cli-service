@@ -14,7 +14,7 @@ const { logger } = require('../lib/logger');
  * GET  /apps/:name/logs     — get container logs
  * DELETE /apps/:name        — remove container
  */
-async function appRoutes(fastify, { registry, containerManager, networkManager }) {
+async function appRoutes(fastify, { registry, containerManager, networkManager, caddyRouter }) {
   // Create and start an app container
   fastify.post('/apps/create', {
     schema: {
@@ -59,21 +59,31 @@ async function appRoutes(fastify, { registry, containerManager, networkManager }
         networkName,
       });
 
+      // Register Caddy route for name-based URL
+      let appUrl = result.url;
+      if (caddyRouter) {
+        try {
+          appUrl = await caddyRouter.register(name, result.hostPort);
+        } catch (err) {
+          log.warn({ err: err.message }, 'Caddy route registration failed; using direct port URL');
+        }
+      }
+
       // Register in app registry
       const app = registry.createApp({
         userId: user_id,
         name,
         image: image || 'node:22-alpine',
         internalPort: port || 3000,
-        url: result.url,
+        url: appUrl,
         containerId: result.containerId,
         startCommand: start_command,
         env,
       });
       registry.updateAppStatus(app.id, 'running', result.containerId);
 
-      log.info({ url: result.url, containerId: result.containerId }, 'App created');
-      return { url: result.url, container_id: result.containerId, status: 'running' };
+      log.info({ url: appUrl, containerId: result.containerId }, 'App created');
+      return { url: appUrl, container_id: result.containerId, status: 'running' };
 
     } catch (err) {
       log.error({ err }, 'Failed to create app');
