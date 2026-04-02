@@ -65,20 +65,50 @@ class CaddyRouter {
 
   /**
    * Registers existing apps on startup (call after port sync).
+   * Accepts an optional ContainerManager to look up host ports from Docker.
    */
-  async syncFromRegistry(apps) {
+  async syncFromRegistry(apps, containerManager) {
     for (const app of apps) {
-      if (app.status === 'running' && app.url) {
-        // Extract port from existing URL
-        const portMatch = app.url.match(/:(\d+)$/);
-        if (portMatch) {
-          this._routes.set(app.name, {
-            hostname: `${app.name}.${this._domain}`,
-            hostPort: parseInt(portMatch[1], 10),
-          });
-        }
+      if (app.status !== 'running') continue;
+
+      let hostPort = null;
+
+      // Try extracting port from URL (direct port URLs like :8022)
+      const portMatch = (app.url || '').match(/:(\d+)$/);
+      if (portMatch) {
+        hostPort = parseInt(portMatch[1], 10);
+      }
+
+      // If no port in URL, look up from ContainerManager's synced ports
+      if (!hostPort && containerManager) {
+        hostPort = containerManager.getHostPort(app.name);
+      }
+
+      // Fallback: try to extract from Docker container ID
+      if (!hostPort && app.container_id) {
+        try {
+          const Docker = require('dockerode');
+          const docker = new Docker();
+          const container = docker.getContainer(app.container_id);
+          const info = await container.inspect();
+          const ports = info.NetworkSettings?.Ports || {};
+          for (const [, bindings] of Object.entries(ports)) {
+            if (bindings && bindings[0] && bindings[0].HostPort) {
+              hostPort = parseInt(bindings[0].HostPort, 10);
+              break;
+            }
+          }
+        } catch { /* container may not exist */ }
+      }
+
+      if (hostPort) {
+        this._routes.set(app.name, {
+          hostname: `${app.name}.${this._domain}`,
+          hostPort,
+        });
       }
     }
+
     if (this._routes.size > 0) {
       await this._reload();
       logger.info({ appCount: this._routes.size }, 'Caddy routes synced from registry');

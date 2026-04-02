@@ -263,6 +263,26 @@ class ContainerManager {
   }
 
   /**
+   * Get the host port for a named app by inspecting Docker.
+   * Used by CaddyRouter to sync routes on startup.
+   */
+  async getHostPort(appName) {
+    try {
+      const containers = await this._docker.listContainers({ all: false });
+      for (const c of containers) {
+        // Container names include the gemini-{userId}- prefix
+        const name = (c.Names || []).join('');
+        if (name.includes(appName)) {
+          for (const p of (c.Ports || [])) {
+            if (p.PublicPort) return p.PublicPort;
+          }
+        }
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  /**
    * Scans existing Docker containers to populate the used ports set.
    * Must be called on startup to avoid port conflicts after daemon restart.
    */

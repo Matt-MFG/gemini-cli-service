@@ -91,7 +91,7 @@ async function main() {
   // Sync Caddy routes for already-running apps
   try {
     const existingApps = registry.listApps('web-user');
-    await caddyRouter.syncFromRegistry(existingApps);
+    await caddyRouter.syncFromRegistry(existingApps, containerManager);
   } catch (err) {
     logger.warn({ err: err.message }, 'Caddy route sync skipped');
   }
