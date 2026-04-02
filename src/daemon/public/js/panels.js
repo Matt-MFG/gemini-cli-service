@@ -5,6 +5,21 @@ import { state, $, escHtml, authFetch, saveLocalState } from './state.js';
 import { addSystemMsg, sendText } from './chat.js';
 
 // ============================================================
+// HELPERS
+// ============================================================
+function appendApiKey(url) {
+  if (!state.apiKey || state.apiKey === 'no-auth') return url;
+  try {
+    const u = new URL(url, window.location.origin);
+    u.searchParams.set('api_key', state.apiKey);
+    return u.toString();
+  } catch {
+    const sep = url.includes('?') ? '&' : '?';
+    return url + sep + 'api_key=' + encodeURIComponent(state.apiKey);
+  }
+}
+
+// ============================================================
 // RIGHT PANELS — Glassmorphic toolbar + tabs (P3-41, P3-42, P3-43)
 // ============================================================
 let activeTabId = null;
@@ -89,7 +104,9 @@ function renderPanels() {
   if (activePanel) {
     const iframe = document.createElement('iframe');
     iframe.className = 'panel-iframe';
-    iframe.src = activePanel.url;
+    // Append API key as query param for Caddy-authenticated app URLs
+    const iframeUrl = appendApiKey(activePanel.url);
+    iframe.src = iframeUrl;
     iframe.title = activePanel.name;
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
     iframe.style.animation = 'fadeIn 300ms ease-out';
