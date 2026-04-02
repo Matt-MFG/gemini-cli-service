@@ -33,7 +33,8 @@ function detectStructuredPanel(event) {
   if (!event) return null;
 
   // Direct a2ui_render tool results
-  if (event.type === 'tool_result' && event.tool_name === 'a2ui_render') {
+  const toolName = event.tool_name || event.tool_id || '';
+  if (event.type === 'tool_result' && (toolName === 'a2ui_render' || toolName.includes('a2ui_render'))) {
     try {
       const data = typeof event.output === 'string' ? JSON.parse(event.output) : event.output;
       if (data && data.template && data.data) {
@@ -43,7 +44,8 @@ function detectStructuredPanel(event) {
   }
 
   // apps_list results -> app_inventory template
-  if (event.type === 'tool_result' && event.tool_name === 'apps_list') {
+  const toolKey = event.tool_name || event.tool_id || '';
+  if (event.type === 'tool_result' && (toolKey === 'apps_list' || toolKey.includes('apps_list'))) {
     try {
       const data = typeof event.output === 'string' ? JSON.parse(event.output) : event.output;
       if (data && data.apps && Array.isArray(data.apps)) {
@@ -53,7 +55,7 @@ function detectStructuredPanel(event) {
   }
 
   // apps_create results -> single app card
-  if (event.type === 'tool_result' && event.tool_name === 'apps_create') {
+  if (event.type === 'tool_result' && (toolKey === 'apps_create' || toolKey.includes('apps_create'))) {
     try {
       const data = typeof event.output === 'string' ? JSON.parse(event.output) : event.output;
       if (data && data.url) {
